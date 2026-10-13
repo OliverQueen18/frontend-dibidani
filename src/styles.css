@@ -1,0 +1,1 @@
+:root{--green:#087a47;--green-dark:#063b2c;--orange:#ff7900;--ink:#153a2f;--muted:#71827b;--line:#e4ece8;--bg:#f6f9f7}*{box-sizing:border-box}html,body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink)}body{min-width:320px}.container{width:min(1440px,calc(100% - 32px));margin:auto}button,a{cursor:pointer}h1,h2,h3{letter-spacing:-.02em}

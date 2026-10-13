@@ -1,0 +1,38 @@
+# Production : PostgreSQL et l'API restent sur le réseau interne. Seul Nginx est public.
+# Usage : docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+name: dibidani
+
+services:
+  db:
+    ports: !reset []
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  backend:
+    ports: !reset []
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SEED_DEMO_DATA: "false"
+      PAYMENT_MOCK_ENABLED: "false"
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required in production}
+      PUBLIC_URL: ${PUBLIC_URL:?PUBLIC_URL is required in production}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  frontend:
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
