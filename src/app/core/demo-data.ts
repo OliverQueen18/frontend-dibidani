@@ -48,7 +48,7 @@ export const DEMO_SETTINGS: ShopSettings = {
   phone: '+223 76 12 34 56',
   whatsapp: '+223 76 12 34 56',
   whatsappUrl: 'https://wa.me/22376123456',
-  email: 'contact@dibidani.ml',
+  email: 'contact@dibidani.com',
   address: 'Marché de Dibidani, Commune III',
   city: 'Bamako',
   facebookUrl: 'https://www.facebook.com/dibidani',

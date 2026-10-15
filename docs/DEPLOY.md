@@ -77,7 +77,7 @@ git -C ../backend-dibidani-1 pull
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-Mise à jour par Jenkins (recommandé) : `Jenkinsfile` à la racine, voir [JENKINS.md](JENKINS.md).
+**VPS (nginx-proxy)** : [VPS.md](VPS.md). Jenkins pousse `oliverqueen18/dibidani-frontend` — [JENKINS.md](JENKINS.md).
 
 Journaux :
 
@@ -121,8 +121,8 @@ Les clés Orange Money / Moov Money ne doivent jamais être écrites dans les fi
 Placer un reverse proxy TLS (Caddy, Traefik ou Nginx + Let’s Encrypt) devant le service `frontend`, et régler :
 
 ```
-PUBLIC_URL=https://dibidani.ml
-CORS_ORIGINS=https://dibidani.ml
+PUBLIC_URL=https://dibidani.com
+CORS_ORIGINS=https://dibidani.com
 ```
 
 Le backend honore `X-Forwarded-Proto` (profil `prod`) pour les cookies Secure. Activer HSTS uniquement derrière TLS.

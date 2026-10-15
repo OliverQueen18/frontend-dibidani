@@ -8,16 +8,17 @@ pipeline {
   triggers { pollSCM('H/10 * * * *') }
   parameters {
     booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Déployer après le build')
-    choice(name: 'DEPLOY_MODE', choices: ['same-host', 'ssh'], description: 'same-host : Jenkins et Docker Compose sur la même machine. ssh : transfert de l’image vers le serveur.')
-    string(name: 'DEPLOY_PATH', defaultValue: '/opt/dibidani', description: 'Dossier Compose (docker-compose.yml + docker-compose.prod.yml + .env)')
-    string(name: 'DEPLOY_HOST', defaultValue: '', description: 'Hôte SSH si DEPLOY_MODE=ssh, ex. deploy@dibidani.ml')
+    choice(name: 'DEPLOY_MODE', choices: ['hub', 'ssh', 'same-host'], description: 'hub : Docker Hub + compose pull sur le VPS. ssh : docker save. same-host : Jenkins sur le serveur.')
+    string(name: 'DEPLOY_PATH', defaultValue: '/opt', description: 'Dossier du compose VPS (docker-compose.yml + docker-compose.dibidani.yml + .env)')
+    string(name: 'DEPLOY_HOST', defaultValue: '', description: 'Hôte SSH si hub/ssh, ex. root@vps')
   }
   environment {
+    REGISTRY = 'oliverqueen18'
     IMAGE_NAME = 'dibidani-frontend'
-    COMPOSE_SERVICE = 'frontend'
-    IMAGE_ENV_VAR = 'FRONTEND_IMAGE'
-    COMPOSE_FILES = '-f docker-compose.yml -f docker-compose.prod.yml'
+    COMPOSE_SERVICE = 'frontend-dibidani'
+    COMPOSE_FILES = '-f docker-compose.yml -f docker-compose.dibidani.yml'
     SSH_CREDENTIALS_ID = 'dibidani-deploy-ssh'
+    DOCKERHUB_CREDENTIALS_ID = 'dockerhub-oliverqueen18'
   }
   stages {
     stage('Préparer') {
@@ -26,14 +27,15 @@ pipeline {
           def sha = env.GIT_COMMIT ?: ''
           def shortSha = sha.length() >= 8 ? sha.substring(0, 8) : (env.BUILD_NUMBER ?: 'local')
           env.IMAGE_TAG = "${env.BUILD_NUMBER}-${shortSha}"
-          env.FULL_IMAGE = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+          env.HUB_IMAGE = "${env.REGISTRY}/${env.IMAGE_NAME}"
+          env.FULL_IMAGE = "${env.HUB_IMAGE}:${env.IMAGE_TAG}"
           echo "Image : ${env.FULL_IMAGE}"
         }
       }
     }
     stage('Image Docker') {
       steps {
-        sh 'docker build -t "$FULL_IMAGE" -t "$IMAGE_NAME:latest" .'
+        sh 'docker build -t "$FULL_IMAGE" -t "$HUB_IMAGE:latest" -t "$IMAGE_NAME:latest" .'
       }
     }
     stage('Déployer') {
@@ -58,23 +60,59 @@ boolean shouldDeploy() {
 }
 
 void deployImage() {
+  if (params.DEPLOY_MODE == 'hub') {
+    pushHub()
+    remoteComposePull()
+    return
+  }
   if (params.DEPLOY_MODE == 'ssh') {
     if (!params.DEPLOY_HOST?.trim()) {
-      error 'DEPLOY_HOST est obligatoire en mode ssh (ex. deploy@192.168.1.10).'
+      error 'DEPLOY_HOST est obligatoire en mode ssh.'
     }
     sshagent(credentials: [env.SSH_CREDENTIALS_ID]) {
       sh """
         docker save '${env.FULL_IMAGE}' | gzip | ssh -o StrictHostKeyChecking=accept-new ${params.DEPLOY_HOST} 'gunzip | docker load'
       """
-      writeFile file: 'remote-deploy.sh', text: remoteDeployScript()
+      writeFile file: 'remote-deploy.sh', text: remoteUpScript()
       sh "ssh -o StrictHostKeyChecking=accept-new ${params.DEPLOY_HOST} 'bash -s' < remote-deploy.sh"
     }
-  } else {
-    sh remoteDeployScript()
+    return
+  }
+  sh remoteUpScript()
+}
+
+void pushHub() {
+  withCredentials([usernamePassword(credentialsId: env.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+    sh '''
+      echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
+      docker push "$FULL_IMAGE"
+      docker push "$HUB_IMAGE:latest"
+      docker logout
+    '''
   }
 }
 
-String remoteDeployScript() {
+void remoteComposePull() {
+  if (!params.DEPLOY_HOST?.trim()) {
+    error 'DEPLOY_HOST est obligatoire en mode hub (SSH vers le VPS).'
+  }
+  writeFile file: 'remote-deploy.sh', text: remotePullScript()
+  sshagent(credentials: [env.SSH_CREDENTIALS_ID]) {
+    sh "ssh -o StrictHostKeyChecking=accept-new ${params.DEPLOY_HOST} 'bash -s' < remote-deploy.sh"
+  }
+}
+
+String remotePullScript() {
+  return """#!/bin/bash
+set -euo pipefail
+cd '${params.DEPLOY_PATH}'
+docker compose ${env.COMPOSE_FILES} pull ${env.COMPOSE_SERVICE}
+docker compose ${env.COMPOSE_FILES} up -d --no-deps --force-recreate ${env.COMPOSE_SERVICE}
+${healthLoop()}
+"""
+}
+
+String remoteUpScript() {
   return """#!/bin/bash
 set -euo pipefail
 cd '${params.DEPLOY_PATH}'
@@ -82,21 +120,20 @@ if [ ! -f .env ]; then
   echo "Fichier .env introuvable dans ${params.DEPLOY_PATH}" >&2
   exit 1
 fi
-awk -v k='${env.IMAGE_ENV_VAR}' -v v='${env.FULL_IMAGE}' '
-  BEGIN { f=0 }
-  \$0 ~ "^" k "=" { print k "=" v; f=1; next }
-  { print }
-  END { if (!f) print k "=" v }
-' .env > .env.tmp && mv .env.tmp .env
-export ${env.IMAGE_ENV_VAR}='${env.FULL_IMAGE}'
 docker compose ${env.COMPOSE_FILES} up -d --no-deps --no-build ${env.COMPOSE_SERVICE}
-for i in \$(seq 1 24); do
-  status=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' dibidani-frontend 2>/dev/null || echo missing)
-  echo "santé dibidani-frontend: \$status"
-  [ "\$status" = healthy ] && exit 0
+${healthLoop()}
+"""
+}
+
+String healthLoop() {
+  return '''
+for i in $(seq 1 24); do
+  status=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' dibidani-frontend 2>/dev/null || echo missing)
+  echo "santé dibidani-frontend: $status"
+  [ "$status" = healthy ] && exit 0
   sleep 5
 done
 docker logs --tail 80 dibidani-frontend || true
 exit 1
-"""
+'''
 }

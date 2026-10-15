@@ -14,7 +14,7 @@ docker compose up --build
 - Site : http://localhost
 - Santé Nginx : http://localhost/health
 
-Documentation : [docs/DEPLOY.md](docs/DEPLOY.md) · Jenkins : [docs/JENKINS.md](docs/JENKINS.md)
+Documentation : [docs/DEPLOY.md](docs/DEPLOY.md) · Jenkins : [docs/JENKINS.md](docs/JENKINS.md) · VPS : [docs/VPS.md](docs/VPS.md)
 
 ## Production
 
