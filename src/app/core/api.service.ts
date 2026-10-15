@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, from, switchMap } from 'rxjs';
+import { prepareImageUpload } from './image-upload';
 import { HomeData, Product, Category, Order, ShopSettings, ProductShare, SocialChannel, SocialPost, CmsContent, SiteBlock } from './models';
 
 @Injectable({providedIn: 'root'})
@@ -133,9 +134,13 @@ export class ApiService {
   }
   deleteZone(id: number) { return this.http.delete<any>(`${this.base}/admin/delivery-zones/${id}`); }
   upload(file: File) {
-    const fd = new FormData();
-    fd.append('file', file);
-    return this.http.post<{url: string}>(`${this.base}/admin/uploads`, fd);
+    return from(prepareImageUpload(file)).pipe(
+      switchMap(prepared => {
+        const fd = new FormData();
+        fd.append('file', prepared);
+        return this.http.post<{url: string}>(`${this.base}/admin/uploads`, fd);
+      })
+    );
   }
   studioUpload(file: File, productId?: number) {
     const fd = new FormData();

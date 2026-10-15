@@ -3,6 +3,7 @@ import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {ActivatedRoute, Router} from '@angular/router';
 import {ApiService} from '../core/api.service';
+import {uploadErrorMessage} from '../core/image-upload';
 import {SettingsService} from '../core/settings.service';
 import {CmsContent, SiteBlock, SiteBlockKind} from '../core/models';
 import {ADMIN_PAGE_STYLES} from './admin-ui';
@@ -256,14 +257,23 @@ export class AdminCmsComponent implements OnInit {
     });
   }
   upload(ev: Event, field: string) {
-    const file = (ev.target as HTMLInputElement).files?.[0];
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
+    this.err = '';
+    this.msg = 'Envoi de l’image…';
     this.api.upload(file).subscribe({
       next: r => {
+        this.msg = 'Image envoyée.';
         if (this.tab === 'appearance') this.appearance[field] = r.url;
         else if (this.form) this.form[field] = r.url;
+        input.value = '';
       },
-      error: e => this.err = e.error?.message || 'Téléversement impossible.'
+      error: e => {
+        this.msg = '';
+        this.err = uploadErrorMessage(e);
+        input.value = '';
+      }
     });
   }
 }

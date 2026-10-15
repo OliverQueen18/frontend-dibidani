@@ -96,6 +96,7 @@ void remoteComposePull() {
   withSsh {
     sh """
       scp -i "\$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new docs/docker-compose.dibidani.yml ${params.DEPLOY_HOST}:${params.DEPLOY_PATH}/docker-compose.dibidani.yml
+      scp -i "\$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new docs/nginx-proxy-vhost.dibidani.conf ${params.DEPLOY_HOST}:${params.DEPLOY_PATH}/.dibidani-vhost.conf
       ssh -i "\$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new ${params.DEPLOY_HOST} 'bash -s' < remote-deploy.sh
     """
   }
@@ -118,6 +119,7 @@ if [ ! -f .env ]; then
   echo "Fichier .env introuvable dans ${params.DEPLOY_PATH}" >&2
   exit 1
 fi
+${uploadProxyFix()}
 awk -v k='DIBIDANI_FRONTEND_TAG' -v v='${env.IMAGE_TAG}' '
   BEGIN { f=0 }
   \$0 ~ "^" k "=" { print k "=" v; f=1; next }
@@ -142,6 +144,44 @@ fi
 docker compose ${env.COMPOSE_FILES} up -d --no-deps --no-build ${env.COMPOSE_SERVICE}
 ${healthLoop()}
 """
+}
+
+String uploadProxyFix() {
+  return '''
+set +e
+mkdir -p uploads/dibidani
+chmod 777 uploads/dibidani || true
+CONF=.dibidani-vhost.conf
+if [ -f "$CONF" ]; then
+  VDIR=""
+  PROXY=""
+  for name in $(docker ps --format '{{.Names}}'); do
+    src=$(docker inspect "$name" --format '{{range .Mounts}}{{if eq .Destination "/etc/nginx/vhost.d"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || true)
+    if [ -n "$src" ]; then
+      VDIR="$src"
+      PROXY="$name"
+      break
+    fi
+  done
+  if [ -z "$VDIR" ]; then
+    for d in data/vhost.d nginx/vhost.d vhost.d; do
+      if [ -d "$d" ]; then VDIR="$d"; break; fi
+    done
+  fi
+  if [ -n "$VDIR" ]; then
+    mkdir -p "$VDIR"
+    cp "$CONF" "$VDIR/dibidani.com"
+    cp "$CONF" "$VDIR/www.dibidani.com"
+    echo "nginx-proxy uploads 32m → $VDIR"
+    if [ -n "$PROXY" ]; then
+      docker exec "$PROXY" nginx -s reload >/dev/null 2>&1 || docker kill -s HUP "$PROXY" >/dev/null 2>&1 || true
+    fi
+  else
+    echo "Avertissement: vhost.d nginx-proxy introuvable (413 si image > 1 Mo)" >&2
+  fi
+fi
+set -e
+'''
 }
 
 String healthLoop() {

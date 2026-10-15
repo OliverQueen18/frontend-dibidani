@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -85,7 +85,7 @@ interface Msg { from: 'bot' | 'user'; text: string; products?: Product[]; sugges
     @media(max-width:600px){.panel{height:min(72vh,620px)}}
   `]
 })
-export class ChatbotComponent {
+export class ChatbotComponent implements OnInit {
   @ViewChild('thread') thread?: ElementRef<HTMLElement>;
   open = signal(false);
   busy = signal(false);
@@ -94,13 +94,18 @@ export class ChatbotComponent {
   draft = '';
   messages = signal<Msg[]>([{
     from: 'bot',
-    text: 'Bonjour, je suis l\'assistant Dibidani. Cherchez un produit à l\'écrit ou au micro, je vous accompagne jusqu\'à la commande.',
+    text: 'Bienvenue chez Dibidani ! Je suis votre assistant. Dites-moi un produit à l\'écrit ou au micro, je cherche, je l\'ajoute au panier et je vous emmène jusqu\'à la commande.',
     suggestions: ['Je cherche une perceuse', 'Riz 50 kg', 'Voir le panier', 'Passer commande']
   }]);
   lastIds: number[] = [];
   voiceTitle = 'Parler';
   private rec: any;
   private fromVoice = false;
+
+  ngOnInit() {
+    this.open.set(true);
+    setTimeout(() => this.scroll(), 50);
+  }
 
   constructor(private assistant: AssistantService, private cart: CartService, private router: Router) {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -125,7 +130,12 @@ export class ChatbotComponent {
         }
       };
       this.rec.onerror = () => this.stopVoice();
-      this.rec.onend = () => this.listening.set(false);
+      this.rec.onend = () => {
+        const leftover = (this.interim() || this.draft).trim();
+        this.listening.set(false);
+        this.interim.set('');
+        if (leftover && !this.busy()) this.send(leftover, true);
+      };
     } else {
       this.voiceTitle = 'Micro non disponible sur ce navigateur';
     }

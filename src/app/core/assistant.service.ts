@@ -27,14 +27,9 @@ export class AssistantService {
 
   chat(message: string, cartCount: number, lastProductIds: number[]): Observable<AssistantReply> {
     const local = this.local(message, cartCount, lastProductIds);
-    if (local.intent !== 'SEARCH') return of(local);
     return this.http.post<AssistantReply>('/api/v1/public/assistant/chat', { message, cartCount, lastProductIds }).pipe(
-      timeout(2500),
-      map(r => ({
-        ...r,
-        products: (r.products || []).map(asProduct),
-        suggestions: r.suggestions || [],
-      })),
+      timeout(8000),
+      map(r => mergeReply(r, local)),
       catchError(() => of(local))
     );
   }
@@ -44,8 +39,8 @@ export class AssistantService {
     const last = lastProductIds.map(id => DEMO_PRODUCTS.find(p => p.id === id)).filter((p): p is Product => !!p);
     const chips = ['Je cherche une perceuse', 'Riz 50 kg', 'Voir le panier', 'Passer commande'];
 
-    if (/bonjour|salut|hello|bonsoir|i ni ce/.test(n) && n.split(/\s+/).length <= 4) {
-      return { reply: 'Bonjour, je suis l\'assistant Dibidani. Dites un produit à l\'écrit ou au micro : je cherche, j\'ajoute au panier et je vous emmène jusqu\'à la commande.', intent: 'GREETING', query: '', products: DEMO_PRODUCTS.slice(0, 4), suggestions: chips };
+    if (/bonjour|salut|hello|bonsoir|i ni ce/.test(n) && !hint(n)) {
+      return { reply: 'Bienvenue chez Dibidani ! Dites un produit à l\'écrit ou au micro : je cherche, j\'ajoute au panier et je vous emmène jusqu\'à la commande.', intent: 'GREETING', query: '', products: DEMO_PRODUCTS.slice(0, 4), suggestions: chips };
     }
     if (/aide|comment|livraison/.test(n)) {
       return { reply: 'Je cherche un produit (écrit ou vocal), je l\'ajoute au panier et je vous conduis à la commande. Après votre commande, Dibidani vérifie la disponibilité auprès des vendeurs puis vous confirme. Livraison à Bamako à partir de 2 500 FCFA.', intent: 'HELP', query: '', products: [], suggestions: chips };
@@ -97,11 +92,27 @@ export function asProduct(s: any): Product {
   };
 }
 
+function mergeReply(r: AssistantReply, local: AssistantReply): AssistantReply {
+  const products = (r.products || []).map(asProduct);
+  const emptySearch = (r.intent === 'SEARCH' || local.intent === 'SEARCH') && products.length === 0;
+  if (emptySearch && local.products?.length) {
+    return { ...r, reply: local.reply, query: r.query || local.query, products: local.products, suggestions: r.suggestions?.length ? r.suggestions : local.suggestions };
+  }
+  return { ...r, products, suggestions: r.suggestions?.length ? r.suggestions : local.suggestions };
+}
+
 function searchLocal(q: string): Product[] {
   const t = fold(q);
   if (!t) return [];
-  return DEMO_PRODUCTS.filter(p => fold(p.name + ' ' + (p.category?.name || '') + ' ' + (p.brand?.name || '')).includes(t)
-    || t.split(/\s+/).some(w => w.length > 2 && fold(p.name).includes(w))).slice(0, 6);
+  const words = t.split(/\s+/).map(singular).filter(w => w.length > 2);
+  return DEMO_PRODUCTS.filter(p => {
+    const hay = fold([p.name, p.category?.name, p.brand?.name, p.shortDescription].filter(Boolean).join(' '));
+    return hay.includes(t) || words.some(w => hay.includes(w));
+  }).slice(0, 6);
+}
+
+function singular(t: string): string {
+  return t.length >= 5 && t.endsWith('s') && !t.endsWith('ss') ? t.slice(0, -1) : t;
 }
 
 function pickLocal(n: string, last: Product[]): Product | undefined {
@@ -121,7 +132,7 @@ function qty(n: string): number {
 }
 
 function hint(n: string): string {
-  return n.replace(/\b(ajoute|ajouter|mets|met|prendre|prends|prend|le premier|au panier|panier|commande|commander|passer|payer|je cherche|cherche moi|je veux|je voudrais|montre moi|trouve moi|besoin de|un|une|le|la|les|de|du|des|moi)\b/g, ' ')
+  return n.replace(/\b(ajoute|ajouter|mets|met|prendre|prends|prend|le premier|au panier|panier|commande|commander|passer|payer|je cherche|cherche moi|je veux|je voudrais|montre moi|trouve moi|besoin de|est ce que|est-ce que|avez vous|vous avez|tu as|s il te plait|sil te plait|s il vous plait|un|une|le|la|les|de|du|des|moi|euh|alors|donc|bonjour|salut|dibidani)\b/g, ' ')
     .replace(/\s+/g, ' ').trim();
 }
 

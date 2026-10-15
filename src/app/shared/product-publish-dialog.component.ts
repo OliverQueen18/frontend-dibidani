@@ -2,6 +2,7 @@ import { Component, ElementRef, HostListener, ViewChild, effect, untracked } fro
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../core/api.service';
+import { uploadErrorMessage } from '../core/image-upload';
 import { AuthService } from '../core/auth.service';
 import { ProductPublishService, ProductPublishSession } from '../core/product-publish.service';
 import { ProductPhotoStudioComponent } from './product-photo-studio.component';
@@ -629,7 +630,7 @@ export class ProductPublishDialogComponent {
           this.form.images = [...(this.form.images || []), r.url];
           if (!this.form.mainImageUrl) this.form.mainImageUrl = r.url;
         },
-        error: e => this.err = e.error?.message || 'Téléversement impossible.'
+        error: e => this.err = uploadErrorMessage(e)
       });
     }
   }

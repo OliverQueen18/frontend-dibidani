@@ -2,6 +2,7 @@ import {Component, OnInit} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {ApiService} from '../core/api.service';
+import {uploadErrorMessage} from '../core/image-upload';
 import {ADMIN_PAGE_STYLES} from './admin-ui';
 
 @Component({
@@ -90,7 +91,12 @@ export class AdminAdsComponent implements OnInit {
   upload(ev: Event) {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file || !this.form) return;
-    this.api.upload(file).subscribe({next: r => this.form.imageUrl = r.url, error: e => this.err = e.error?.message || 'Upload impossible.'});
+    this.err = '';
+    this.msg = 'Envoi de l’image…';
+    this.api.upload(file).subscribe({
+      next: r => { this.msg = 'Image envoyée.'; this.form.imageUrl = r.url; },
+      error: e => { this.msg = ''; this.err = uploadErrorMessage(e); }
+    });
   }
 }
 function toLocal(iso: string) {
