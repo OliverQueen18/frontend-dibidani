@@ -137,7 +137,9 @@ String healthLoop() {
 for i in $(seq 1 24); do
   status=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' dibidani-frontend 2>/dev/null || echo missing)
   echo "santé dibidani-frontend: $status"
-  [ "$status" = healthy ] && exit 0
+  if [ "$status" = healthy ]; then
+    exit 0
+  fi
   sleep 5
 done
 docker logs --tail 80 dibidani-frontend || true
