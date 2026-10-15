@@ -32,5 +32,12 @@ form.card textarea{min-height:90px}
 form.card .actions{grid-column:1/-1;display:flex;gap:8px;align-items:center}
 .msg{color:#087a47;font-size:13px}.err{color:#b42318;font-size:13px}
 .detail{background:#fff;border:1px solid #e2e9e6;border-radius:12px;padding:16px;margin-top:14px}
-@media(max-width:900px){.kpis{grid-template-columns:1fr 1fr}form.card{grid-template-columns:1fr}.page{overflow:auto}}
+@media(max-width:900px){
+  .kpis{grid-template-columns:1fr 1fr}
+  form.card{grid-template-columns:1fr}
+  .page{overflow:auto}
+  .page header{align-items:stretch}
+  .page h1{font-size:20px}
+  table{min-width:620px}
+}
 `;
