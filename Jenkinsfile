@@ -35,7 +35,7 @@ pipeline {
     }
     stage('Image Docker') {
       steps {
-        sh 'docker build -t "$FULL_IMAGE" -t "$HUB_IMAGE:latest" -t "$IMAGE_NAME:latest" .'
+        sh 'docker build --no-cache --build-arg GIT_SHA="$GIT_COMMIT" -t "$FULL_IMAGE" -t "$HUB_IMAGE:latest" -t "$IMAGE_NAME:latest" .'
       }
     }
     stage('Déployer') {
@@ -95,6 +95,7 @@ void remoteComposePull() {
   writeFile file: 'remote-deploy.sh', text: remotePullScript()
   withSsh {
     sh """
+      scp -i "\$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new docs/docker-compose.dibidani.yml ${params.DEPLOY_HOST}:${params.DEPLOY_PATH}/docker-compose.dibidani.yml
       ssh -i "\$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new ${params.DEPLOY_HOST} 'bash -s' < remote-deploy.sh
     """
   }
@@ -113,8 +114,19 @@ String remotePullScript() {
   return """#!/bin/bash
 set -euo pipefail
 cd '${params.DEPLOY_PATH}'
+if [ ! -f .env ]; then
+  echo "Fichier .env introuvable dans ${params.DEPLOY_PATH}" >&2
+  exit 1
+fi
+awk -v k='DIBIDANI_FRONTEND_TAG' -v v='${env.IMAGE_TAG}' '
+  BEGIN { f=0 }
+  \$0 ~ "^" k "=" { print k "=" v; f=1; next }
+  { print }
+  END { if (!f) print k "=" v }
+' .env > .env.tmp && mv .env.tmp .env
+export DIBIDANI_FRONTEND_TAG='${env.IMAGE_TAG}'
 docker compose ${env.COMPOSE_FILES} pull ${env.COMPOSE_SERVICE}
-docker compose ${env.COMPOSE_FILES} up -d --no-deps --force-recreate ${env.COMPOSE_SERVICE}
+docker compose ${env.COMPOSE_FILES} up -d --no-deps --force-recreate --pull always ${env.COMPOSE_SERVICE}
 ${healthLoop()}
 """
 }

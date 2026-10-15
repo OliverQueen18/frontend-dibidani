@@ -3,7 +3,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+ARG GIT_SHA=unknown
+RUN npm run build && printf '%s\n' "$GIT_SHA" > /app/dist/dibidani/browser/build-id.txt
 
 FROM nginx:1.27-alpine
 RUN apk add --no-cache wget
