@@ -25,15 +25,15 @@ import { SiteBlock } from '../core/models';
   <div class="container header-row">
     <a routerLink="/" class="brand"><img [src]="s.logo()" alt="Dibidani"></a>
     <form class="search" (submit)="$event.preventDefault(); search()">
-      <input [(ngModel)]="q" name="q" placeholder="Rechercher un produit, une marque, une catégorie...">
-      <button>⌕</button>
+      <input [(ngModel)]="q" name="q" placeholder="Rechercher un produit, une marque, une catégorie..." aria-label="Rechercher">
+      <button type="submit" aria-label="Lancer la recherche">⌕</button>
     </form>
     <div class="header-actions">
-      <a routerLink="/admin" *ngIf="auth.isStaff()">▦<span>Back-office</span></a>
-      <a routerLink="/account" [queryParams]="{tab:'favorites'}">♡<span>Favoris</span></a>
-      <a [routerLink]="auth.token() ? auth.homePath() : '/login'">👤<span>{{auth.user()?.fullName || 'Compte'}}</span></a>
-      <button type="button" class="out" *ngIf="auth.token()" (click)="auth.logout()">⏻<span>Déconnexion</span></button>
-      <a routerLink="/cart" class="cart">🛒<span>Panier</span><b>{{cart.count()}}</b></a>
+      <a routerLink="/admin" class="staff" *ngIf="auth.isStaff()" aria-label="Back-office">▦<span>Back-office</span></a>
+      <a routerLink="/account" class="fav" [queryParams]="{tab:'favorites'}" aria-label="Favoris">♡<span>Favoris</span></a>
+      <a class="account" [routerLink]="auth.token() ? auth.homePath() : '/login'" [attr.aria-label]="auth.user()?.fullName || 'Compte'">👤<span>{{auth.user()?.fullName || 'Compte'}}</span></a>
+      <button type="button" class="out" *ngIf="auth.token()" (click)="auth.logout()" aria-label="Déconnexion">⏻<span>Déconnexion</span></button>
+      <a routerLink="/cart" class="cart" aria-label="Panier">🛒<span>Panier</span><b>{{cart.count()}}</b></a>
     </div>
   </div>
   <nav class="nav">
@@ -60,18 +60,38 @@ import { SiteBlock } from '../core/models';
 .search{display:flex;flex:1;border:1px solid #dfe8e4;border-radius:9px;overflow:hidden;background:#fff}
 .search input{border:0;outline:0;flex:1;padding:14px 16px}
 .search button{background:#087a47;color:white;border:0;width:52px;font-size:20px}
-.header-actions{display:flex;gap:20px}
-.header-actions a,.header-actions button{position:relative;display:flex;flex-direction:column;align-items:center;font-size:18px;text-decoration:none;color:#173c31;background:0;border:0;cursor:pointer;font-family:inherit}
+.header-actions{display:flex;gap:20px;flex-shrink:0}
+.header-actions a,.header-actions button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:44px;min-height:44px;font-size:18px;text-decoration:none;color:#173c31;background:0;border:0;cursor:pointer;font-family:inherit}
 .header-actions span{font-size:11px;margin-top:3px}
-.cart b{position:absolute;top:-7px;right:1px;background:#ff7900;color:#fff;border-radius:20px;font-size:10px;padding:2px 5px}
+.cart b{position:absolute;top:-2px;right:0;background:#ff7900;color:#fff;border-radius:20px;font-size:10px;padding:2px 5px}
 .nav{background:#076d40}
-.nav-inner{display:flex;align-items:center;gap:20px;height:42px;overflow:auto}
+.nav-inner{display:flex;align-items:center;gap:20px;height:42px;overflow:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.nav-inner::-webkit-scrollbar{display:none}
 .nav a{color:#fff;text-decoration:none;white-space:nowrap;font-size:13px}
 .nav a:first-child{font-weight:700}
 .nav .promo{margin-left:auto;color:#ffe0c2}
 .top-help{display:flex;align-items:center;gap:10px}
 .topbar app-social-icons{margin-left:4px}
-@media(max-width:900px){.topbar,.nav{display:none}.header-row{height:64px;gap:10px}.brand img{width:120px;height:50px}.header-actions a:not(.cart){display:none}.header-actions .out span{display:none}.search input{min-width:0}}
+@media(max-width:900px){
+  .topbar{display:none}
+  .header-row{height:auto;min-height:56px;gap:10px;padding:8px 0;display:grid;grid-template-columns:auto 1fr auto;align-items:center}
+  .brand{grid-column:1}
+  .search{grid-column:2;min-width:0}
+  .header-actions{grid-column:3;gap:4px}
+  .brand img{width:110px;height:44px}
+  .header-actions .staff,.header-actions .out{display:none}
+  .header-actions span{display:none}
+  .search input{min-width:0;padding:10px 12px}
+  .search button{width:44px}
+  .nav-inner{gap:14px;height:40px}
+}
+@media(max-width:640px){
+  .header-row{grid-template-columns:1fr auto}
+  .brand{grid-column:1;grid-row:1}
+  .header-actions{grid-column:2;grid-row:1}
+  .search{grid-column:1/-1;grid-row:2}
+  .brand img{width:96px;height:40px}
+}
 `]
 })
 export class HeaderComponent {

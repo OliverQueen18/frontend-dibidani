@@ -61,7 +61,8 @@ import {SiteBlock} from '../core/models';
     .foot a,.foot p{color:#cfe2da;font-size:14px;text-decoration:none}
     app-social-icons{margin-top:8px}
     .copy{text-align:center;border-top:1px solid #ffffff1c;padding:16px;color:#b9d4ca;font-size:12px}
-    @media(max-width:700px){.foot{grid-template-columns:1fr 1fr}}
+    @media(max-width:700px){.foot{grid-template-columns:1fr 1fr;gap:22px;padding:28px 0}}
+    @media(max-width:480px){.foot{grid-template-columns:1fr}.foot img{width:140px}}
   `]
 })
 export class FooterComponent {

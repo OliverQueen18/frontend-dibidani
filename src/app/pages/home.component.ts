@@ -140,7 +140,6 @@ import {DEMO_HOME} from '../core/demo-data';
   .partner-row{grid-template-columns:repeat(4,1fr)}
 }
 @media(max-width:700px){
-  .hero-nav{display:none}
   .trust-row{grid-template-columns:1fr 1fr;gap:15px}
   .trust-row div{border-right:0}
   .category-grid{grid-template-columns:repeat(4,1fr)}

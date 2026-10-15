@@ -291,7 +291,7 @@ type OrderFilter = 'all' | 'open' | 'delivered';
     .err{color:#b42318}.ok{color:#087a47}
     @media(max-width:800px){
       .account{grid-template-columns:1fr}
-      .account aside{position:sticky;top:64px;z-index:4}
+      .account aside{position:sticky;top:0;z-index:4}
       .account aside nav{flex-direction:row;flex-wrap:nowrap;overflow:auto}
       .account aside button{white-space:nowrap}
       .account section{overflow:auto}
