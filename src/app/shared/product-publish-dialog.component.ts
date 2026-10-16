@@ -6,6 +6,7 @@ import { uploadErrorMessage } from '../core/image-upload';
 import { AuthService } from '../core/auth.service';
 import { ProductPublishService, ProductPublishSession } from '../core/product-publish.service';
 import { ProductPhotoStudioComponent } from './product-photo-studio.component';
+import { ImagePickerComponent } from './image-picker.component';
 
 type Step = 1 | 2 | 3;
 type QuickKind = 'category' | 'brand' | 'unit' | null;
@@ -13,7 +14,7 @@ type QuickKind = 'category' | 'brand' | 'unit' | null;
 @Component({
   selector: 'app-product-publish-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ProductPhotoStudioComponent],
+  imports: [CommonModule, FormsModule, ProductPhotoStudioComponent, ImagePickerComponent],
   template: `
 <div class="scrim" *ngIf="open" role="presentation">
   <section class="sheet" role="dialog" aria-modal="true" [attr.aria-labelledby]="'pub-title'">
@@ -142,6 +143,10 @@ type QuickKind = 'category' | 'brand' | 'unit' | null;
           (urlsChange)="onStudioUrls($event)"
           (productPrefill)="onStudioProduct($event)">
         </app-product-photo-studio>
+        <div class="lib-row">
+          <button type="button" class="ghost" (click)="media.open()">Choisir dans la bibliothèque</button>
+          <app-image-picker #media [embed]="false" (urlChange)="addFromLib($event)"></app-image-picker>
+        </div>
         <div class="vitrine-pick" *ngIf="form.images.length">
           <p>Image vitrine (carte produit sur le marché)</p>
           <div class="thumbs">
@@ -235,6 +240,8 @@ h2{margin:2px 0 0;font-size:20px}
 .body{padding:4px 20px 12px;overflow:auto;min-height:0;flex:1}
 .pane{display:grid;grid-template-columns:1.4fr .8fr;gap:16px}
 .pane.photos{grid-template-columns:1fr}
+.lib-row{margin-top:10px}
+.lib-row .ghost{background:#fff;color:#087a47;border:1px solid #c5ddd2}
 .fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .full{grid-column:1/-1}
 label,.specs span{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#4c5e57;font-weight:700}
@@ -354,8 +361,11 @@ export class ProductPublishDialogComponent {
     return names;
   }
 
+  @ViewChild('media') media?: ImagePickerComponent;
+
   @HostListener('document:keydown.escape')
   onEsc() {
+    if (this.media?.shown) return;
     if (this.scanning) { this.stopScan(); return; }
     if (this.quick) { this.quick = null; return; }
     if (this.open) this.cancel();
@@ -506,6 +516,14 @@ export class ProductPublishDialogComponent {
   onStudioUrls(urls: string[]) {
     this.form.images = urls;
     this.form.mainImageUrl = urls[0] || this.form.mainImageUrl || '';
+  }
+  addFromLib(url: string) {
+    if (!url || !this.form) return;
+    const images: string[] = this.form.images || [];
+    if (images.includes(url)) return;
+    if (images.length >= 12) { this.err = '12 photos maximum.'; return; }
+    this.form.images = [...images, url];
+    if (!this.form.mainImageUrl) this.form.mainImageUrl = url;
   }
   onStudioProduct(p: any) {
     if (!p) return;

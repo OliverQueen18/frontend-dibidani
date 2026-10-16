@@ -3,16 +3,16 @@ import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {ActivatedRoute, Router} from '@angular/router';
 import {ApiService} from '../core/api.service';
-import {uploadErrorMessage} from '../core/image-upload';
 import {SettingsService} from '../core/settings.service';
 import {CmsContent, SiteBlock, SiteBlockKind} from '../core/models';
+import {ImagePickerComponent} from '../shared/image-picker.component';
 import {ADMIN_PAGE_STYLES} from './admin-ui';
 
 type Tab = 'appearance' | SiteBlockKind;
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ImagePickerComponent],
   template: `
 <div class="page">
   <header>
@@ -34,7 +34,9 @@ type Tab = 'appearance' | SiteBlockKind;
 
   <form class="card" *ngIf="tab==='appearance'" (submit)="$event.preventDefault(); saveAppearance()">
     <h2>Identité et textes de la vitrine</h2>
-    <label>Logo (URL)<input [(ngModel)]="appearance.logoUrl" name="logoUrl"><input type="file" accept="image/*" (change)="upload($event,'logoUrl')"></label>
+    <label class="full">Logo
+      <app-image-picker [url]="appearance.logoUrl || ''" (urlChange)="appearance.logoUrl=$event"></app-image-picker>
+    </label>
     <label>Bandeau haut<input [(ngModel)]="appearance.topbarText" name="topbarText"></label>
     <label>Badge ville<input [(ngModel)]="appearance.heroLocation" name="heroLocation"></label>
     <label>Sous-badge<input [(ngModel)]="appearance.heroLocationSub" name="heroLocationSub"></label>
@@ -97,11 +99,11 @@ type Tab = 'appearance' | SiteBlockKind;
       <label *ngIf="tab==='HERO' || tab==='PAGE'" class="full">Texte<textarea [(ngModel)]="form.body" name="body"></textarea></label>
       <label *ngIf="tab==='FAQ'" class="full">Réponse<textarea [(ngModel)]="form.body" name="body" required></textarea></label>
       <label *ngIf="tab==='TESTIMONIAL'" class="full">Citation<textarea [(ngModel)]="form.body" name="body"></textarea></label>
-      <label *ngIf="tab==='HERO'">Image<input [(ngModel)]="form.imageUrl" name="imageUrl"><input type="file" accept="image/*" (change)="upload($event,'imageUrl')"></label>
-      <label *ngIf="tab==='PARTNER'" class="full">Logo (URL ou fichier)
-        <input [(ngModel)]="form.imageUrl" name="imageUrl" placeholder="https://…/logo.png">
-        <input type="file" accept="image/*" (change)="upload($event,'imageUrl')">
-        <img *ngIf="form.imageUrl" class="preview" [src]="form.imageUrl" [alt]="form.title || 'Logo'">
+      <label *ngIf="tab==='HERO'" class="full">Image du slider
+        <app-image-picker [url]="form.imageUrl || ''" (urlChange)="form.imageUrl=$event"></app-image-picker>
+      </label>
+      <label *ngIf="tab==='PARTNER'" class="full">Logo
+        <app-image-picker [url]="form.imageUrl || ''" (urlChange)="form.imageUrl=$event"></app-image-picker>
       </label>
       <label *ngIf="tab==='SOCIAL' || tab==='MENU' || tab==='HOME' || tab==='HERO' || tab==='PARTNER' || tab==='FAQ'">Lien<input [(ngModel)]="form.linkUrl" name="linkUrl" [placeholder]="tab==='SOCIAL' || tab==='PARTNER' ? 'https://…' : tab==='FAQ' ? '/track' : '/category/all'"></label>
       <label *ngIf="tab==='HERO' || tab==='HOME'">Bouton / « voir tout »<input [(ngModel)]="form.ctaLabel" name="ctaLabel"></label>
@@ -254,26 +256,6 @@ export class AdminCmsComponent implements OnInit {
     this.api.deleteCmsBlock(b.id).subscribe({
       next: () => { this.msg = 'Supprimé.'; this.load(); this.settings.reload(); },
       error: e => this.err = e.error?.message || 'Suppression impossible.'
-    });
-  }
-  upload(ev: Event, field: string) {
-    const input = ev.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    this.err = '';
-    this.msg = 'Envoi de l’image…';
-    this.api.upload(file).subscribe({
-      next: r => {
-        this.msg = 'Image envoyée.';
-        if (this.tab === 'appearance') this.appearance[field] = r.url;
-        else if (this.form) this.form[field] = r.url;
-        input.value = '';
-      },
-      error: e => {
-        this.msg = '';
-        this.err = uploadErrorMessage(e);
-        input.value = '';
-      }
     });
   }
 }

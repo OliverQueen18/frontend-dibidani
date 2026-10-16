@@ -13,10 +13,10 @@ import {DEMO_HOME} from '../core/demo-data';
     <div class="hero-slider" (mouseenter)="pause()" (mouseleave)="play()">
       <article class="hero-slide" *ngFor="let slide of slides; let i = index" [class.active]="i===current">
         <a *ngIf="!external(slide)" [routerLink]="ctaHref(slide)" [attr.aria-label]="slide.title">
-          <img [src]="img(slide)" [alt]="slide.title">
+          <img [src]="img(slide)" [alt]="slide.title" (error)="onImgError($event)">
         </a>
         <a *ngIf="external(slide)" [href]="ctaHref(slide)" target="_blank" rel="noopener" [attr.aria-label]="slide.title">
-          <img [src]="img(slide)" [alt]="slide.title">
+          <img [src]="img(slide)" [alt]="slide.title" (error)="onImgError($event)">
         </a>
       </article>
       <button class="hero-nav prev" type="button" (click)="prev()" *ngIf="slides.length>1" aria-label="Slide précédent">‹</button>
@@ -231,6 +231,11 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   img(s: Advertisement) { return s.imageUrl || this.fallback; }
+  onImgError(ev: Event) {
+    const el = ev.target as HTMLImageElement;
+    if (!el || el.src.includes('hero-market')) return;
+    el.src = this.fallback;
+  }
   cta(s: Advertisement) { return s.ctaLabel || 'Découvrir nos offres'; }
   ctaHref(s: Advertisement) { return s.targetUrl || '/category/all'; }
   external(s: Advertisement) { return !!s.external || /^https?:\/\//.test(s.targetUrl || ''); }

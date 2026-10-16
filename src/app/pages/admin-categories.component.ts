@@ -4,11 +4,12 @@ import {FormsModule} from '@angular/forms';
 import {ApiService} from '../core/api.service';
 import {AuthService} from '../core/auth.service';
 import {SettingsService} from '../core/settings.service';
+import {ImagePickerComponent} from '../shared/image-picker.component';
 import {ADMIN_PAGE_STYLES} from './admin-ui';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ImagePickerComponent],
   template: `
 <div class="page">
   <header>
@@ -28,7 +29,9 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
       </select>
     </label>
     <label>Ordre<input type="number" [(ngModel)]="form.displayOrder" name="displayOrder"></label>
-    <label>Image<input [(ngModel)]="form.imageUrl" name="imageUrl"></label>
+    <label class="full">Image
+      <app-image-picker [url]="form.imageUrl || ''" (urlChange)="form.imageUrl=$event"></app-image-picker>
+    </label>
     <label class="full">Description<textarea [(ngModel)]="form.description" name="description"></textarea></label>
     <label>Actif<select [(ngModel)]="form.active" name="active"><option [ngValue]="true">Oui</option><option [ngValue]="false">Non</option></select></label>
     <div class="actions"><button class="btn">Enregistrer</button><button class="btn ghost" type="button" (click)="form=null">Annuler</button></div>

@@ -142,6 +142,12 @@ export class ApiService {
       })
     );
   }
+  mediaLibrary() {
+    return this.http.get<{url: string; name: string; bytes: number; modified: string}[]>(`${this.base}/admin/uploads`);
+  }
+  deleteMedia(url: string) {
+    return this.http.delete(`${this.base}/admin/uploads`, {params: {url}});
+  }
   studioUpload(file: File, productId?: number) {
     const fd = new FormData();
     fd.append('file', file);

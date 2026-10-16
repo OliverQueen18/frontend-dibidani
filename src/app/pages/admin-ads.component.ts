@@ -2,12 +2,12 @@ import {Component, OnInit} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {ApiService} from '../core/api.service';
-import {uploadErrorMessage} from '../core/image-upload';
+import {ImagePickerComponent} from '../shared/image-picker.component';
 import {ADMIN_PAGE_STYLES} from './admin-ui';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ImagePickerComponent],
   template: `
 <div class="page">
   <header>
@@ -30,7 +30,9 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
       </select>
     </label>
     <label class="full">Texte<textarea [(ngModel)]="form.description" name="description"></textarea></label>
-    <label class="full">Image<input [(ngModel)]="form.imageUrl" name="imageUrl"><input type="file" accept="image/*" (change)="upload($event)"></label>
+    <label class="full">Image
+      <app-image-picker [url]="form.imageUrl || ''" (urlChange)="form.imageUrl=$event"></app-image-picker>
+    </label>
     <label>Lien<input [(ngModel)]="form.targetUrl" name="targetUrl"></label>
     <label>Début<input type="datetime-local" [(ngModel)]="form.startLocal" name="startLocal"></label>
     <label>Fin<input type="datetime-local" [(ngModel)]="form.endLocal" name="endLocal"></label>
@@ -87,16 +89,6 @@ export class AdminAdsComponent implements OnInit {
   remove(a: any) {
     if (!confirm('Supprimer « ' + a.title + ' » ?')) return;
     this.api.deleteAd(a.id).subscribe({next: () => { this.msg = 'Supprimée.'; this.load(); }, error: e => this.err = e.error?.message || 'Impossible.'});
-  }
-  upload(ev: Event) {
-    const file = (ev.target as HTMLInputElement).files?.[0];
-    if (!file || !this.form) return;
-    this.err = '';
-    this.msg = 'Envoi de l’image…';
-    this.api.upload(file).subscribe({
-      next: r => { this.msg = 'Image envoyée.'; this.form.imageUrl = r.url; },
-      error: e => { this.msg = ''; this.err = uploadErrorMessage(e); }
-    });
   }
 }
 function toLocal(iso: string) {
