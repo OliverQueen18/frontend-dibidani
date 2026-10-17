@@ -23,6 +23,7 @@ th{font-size:11px;text-transform:uppercase;color:#6a7c75}
 .tag.off{background:#fdecea;color:#b42318}
 .row-actions{display:flex;gap:6px;flex-wrap:wrap}
 .row-actions button{border:0;background:#eaf4ef;color:#0a3026;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:12px}
+.row-actions button.danger{background:#fdecea;color:#b42318}
 .row-actions button:disabled{opacity:.45;cursor:wait}
 form.card{background:#fff;border:1px solid #e2e9e6;border-radius:12px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 form.card h2{grid-column:1/-1;margin:0;font-size:16px}

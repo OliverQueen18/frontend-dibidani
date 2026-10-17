@@ -43,7 +43,7 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
       <td><span class="tag" [class.off]="!c.active">{{c.active ? 'Actif' : 'Masqué'}}</span></td>
       <td class="row-actions" *ngIf="auth.can('CATALOG_MANAGE')">
         <button type="button" (click)="edit(c)">Modifier</button>
-        <button type="button" (click)="remove(c)">Retirer</button>
+        <button type="button" class="danger" (click)="remove(c)">Supprimer</button>
       </td>
     </tr>
   </table>
@@ -65,8 +65,8 @@ export class AdminCategoriesComponent implements OnInit {
     });
   }
   remove(c: any) {
-    if (!confirm('Retirer « ' + c.name + ' » ?')) return;
-    this.api.deleteCategory(c.id).subscribe({next: () => { this.msg = 'Retirée.'; this.load(); this.settings.reload(); }, error: e => this.err = e.error?.message || 'Impossible.'});
+    if (!confirm('Supprimer définitivement « ' + c.name + ' » ?')) return;
+    this.api.deleteCategory(c.id).subscribe({next: () => { this.err = ''; this.msg = 'Catégorie supprimée.'; this.load(); this.settings.reload(); }, error: e => this.err = e.error?.message || 'Impossible.'});
   }
 }
 function flatten(rows: any[], out: any[] = []): any[] {

@@ -29,7 +29,7 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
       <td><span class="tag" [class.off]="!b.active">{{b.active ? 'Actif' : 'Masqué'}}</span></td>
       <td class="row-actions" *ngIf="auth.can('CATALOG_MANAGE')">
         <button type="button" (click)="edit(b)">Modifier</button>
-        <button type="button" (click)="remove(b)">Retirer</button>
+        <button type="button" class="danger" (click)="remove(b)">Supprimer</button>
       </td>
     </tr>
   </table>
@@ -49,7 +49,7 @@ export class AdminBrandsComponent implements OnInit {
     });
   }
   remove(b: any) {
-    if (!confirm('Retirer « ' + b.name + ' » ?')) return;
-    this.api.deleteBrand(b.id).subscribe({next: () => { this.msg = 'Retirée.'; this.load(); }, error: e => this.err = e.error?.message || 'Impossible.'});
+    if (!confirm('Supprimer définitivement « ' + b.name + ' » ?')) return;
+    this.api.deleteBrand(b.id).subscribe({next: () => { this.err = ''; this.msg = 'Marque supprimée.'; this.load(); }, error: e => this.err = e.error?.message || 'Impossible.'});
   }
 }

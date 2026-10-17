@@ -36,7 +36,7 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
       <td><span class="tag" [class.off]="!z.active">{{z.active ? 'Actif' : 'Masqué'}}</span></td>
       <td class="row-actions">
         <button type="button" (click)="edit(z)">Modifier</button>
-        <button type="button" (click)="remove(z)">Retirer</button>
+        <button type="button" class="danger" (click)="remove(z)">Supprimer</button>
       </td>
     </tr>
   </table>
@@ -58,7 +58,7 @@ export class AdminZonesComponent implements OnInit {
     });
   }
   remove(z: any) {
-    if (!confirm('Retirer ' + z.district + ' ?')) return;
-    this.api.deleteZone(z.id).subscribe({next: () => { this.msg = 'Retirée.'; this.load(); }, error: e => this.err = e.error?.message || 'Impossible.'});
+    if (!confirm('Supprimer définitivement « ' + z.district + ' » ?')) return;
+    this.api.deleteZone(z.id).subscribe({next: () => { this.err = ''; this.msg = 'Zone supprimée.'; this.load(); }, error: e => this.err = e.error?.message || 'Impossible.'});
   }
 }

@@ -43,7 +43,7 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
       <td><span class="tag" [class.off]="!v.active">{{v.active ? 'Actif' : 'Masqué'}}</span></td>
       <td class="row-actions" *ngIf="auth.can('CATALOG_MANAGE')">
         <button type="button" (click)="edit(v)">Modifier</button>
-        <button type="button" (click)="remove(v)">Retirer</button>
+        <button type="button" class="danger" (click)="remove(v)">Supprimer</button>
       </td>
     </tr>
   </table>
@@ -70,7 +70,7 @@ export class AdminVendorsComponent implements OnInit {
     });
   }
   remove(v: any) {
-    if (!confirm('Retirer « ' + v.name + ' » ?')) return;
-    this.api.deleteVendor(v.id).subscribe({next: () => { this.msg = 'Retiré.'; this.load(); }, error: e => this.err = e.error?.message || 'Impossible.'});
+    if (!confirm('Supprimer définitivement « ' + v.name + ' » ?')) return;
+    this.api.deleteVendor(v.id).subscribe({next: () => { this.err = ''; this.msg = 'Vendeur supprimé.'; this.load(); }, error: e => this.err = e.error?.message || 'Impossible.'});
   }
 }

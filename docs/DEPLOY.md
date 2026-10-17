@@ -111,7 +111,8 @@ Images uploadées : volume `dibidani_uploads`.
 | `PUBLIC_URL` | URL publique (QR codes, retours de paiement) |
 | `BACKEND_IMAGE` | Tag Docker API (Jenkins) ; défaut `dibidani-backend:local` |
 | `FRONTEND_IMAGE` | Tag Docker Nginx (Jenkins) ; défaut `dibidani-frontend:local` |
-| `SEED_DEMO_DATA` | Données de démo (forcé à `false` en prod) |
+| `SEED_DEMO_DATA` | Comptes et produits de démo (forcé à `false` en prod) |
+| `CATALOG_SEED` | Référentiel catalogue (catégories, marques, vendeurs, zones, publicités). Activé par défaut, y compris en prod. |
 | `PAYMENT_MOCK_ENABLED` | Passerelle de test (forcé à `false` en prod) |
 
 Les clés Orange Money / Moov Money ne doivent jamais être écrites dans les fichiers versionnés.

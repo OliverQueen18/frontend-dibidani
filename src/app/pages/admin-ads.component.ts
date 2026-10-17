@@ -48,7 +48,7 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
       <td><span class="tag" [class.off]="!a.visibleNow">{{a.visibleNow ? 'Visible' : (a.active ? 'Hors période' : 'Masquée')}}</span></td>
       <td class="row-actions">
         <button type="button" (click)="edit(a)">Modifier</button>
-        <button type="button" (click)="remove(a)">Supprimer</button>
+        <button type="button" class="danger" (click)="remove(a)">Supprimer</button>
       </td>
     </tr>
   </table>
@@ -87,8 +87,8 @@ export class AdminAdsComponent implements OnInit {
     });
   }
   remove(a: any) {
-    if (!confirm('Supprimer « ' + a.title + ' » ?')) return;
-    this.api.deleteAd(a.id).subscribe({next: () => { this.msg = 'Supprimée.'; this.load(); }, error: e => this.err = e.error?.message || 'Impossible.'});
+    if (!confirm('Supprimer définitivement « ' + a.title + ' » ?')) return;
+    this.api.deleteAd(a.id).subscribe({next: () => { this.err = ''; this.msg = 'Publicité supprimée.'; this.load(); }, error: e => this.err = e.error?.message || 'Impossible.'});
   }
 }
 function toLocal(iso: string) {
