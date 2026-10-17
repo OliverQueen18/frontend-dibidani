@@ -501,7 +501,7 @@ export class ProductPublishDialogComponent {
     this.form.mainImageUrl = main;
     this.hint = 'Image vitrine mise à jour.';
     if (!this.form.id) return;
-    this.api.setProductVitrine(this.form.id, main).subscribe({
+    this.api.setProductVitrine(this.form.id, String(main).split('#')[0].split('?')[0]).subscribe({
       next: r => {
         if (r?.images?.length) this.form.images = r.images;
         this.form.mainImageUrl = r?.mainImageUrl || main;
@@ -514,8 +514,9 @@ export class ProductPublishDialogComponent {
     this.form.mainImageUrl = this.form.images[0] || '';
   }
   onStudioUrls(urls: string[]) {
-    this.form.images = urls;
-    this.form.mainImageUrl = urls[0] || this.form.mainImageUrl || '';
+    const clean = (urls || []).map(u => String(u || '').split('#')[0].split('?')[0]).filter(Boolean);
+    this.form.images = clean;
+    this.form.mainImageUrl = clean[0] || this.form.mainImageUrl || '';
   }
   addFromLib(url: string) {
     if (!url || !this.form) return;

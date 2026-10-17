@@ -117,7 +117,7 @@ interface Shot {
 })
 export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   @Input() productId: number | null = null;
-  @Input() set barcode(v: string) { if (v && v !== this.lastCode) this.lookup(v); }
+  @Input() barcode = '';
   @Input() urls: string[] = [];
   @Output() urlsChange = new EventEmitter<string[]>();
   @Output() productPrefill = new EventEmitter<any>();
@@ -142,6 +142,7 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   ngOnChanges(ch: SimpleChanges) {
     if (ch['urls']) this.hydrateUrls();
     if (ch['productId'] && this.productId) this.loadAssets();
+    if (!this.productId && this.barcode && this.barcode !== this.lastCode) this.lookup(this.barcode);
   }
 
   ngOnDestroy() {
@@ -334,7 +335,7 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
       this.api.studioConfirm(s.assetId, { productId: this.productId, main: true }).subscribe({ next: done, error: fail });
       return;
     }
-    this.api.setProductVitrine(this.productId, url).subscribe({ next: done, error: fail });
+    this.api.setProductVitrine(this.productId, cleanUrl(url)).subscribe({ next: done, error: fail });
   }
 
   remove(i: number) {
@@ -347,10 +348,14 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
 
   lookup(code: string) {
     const c = (code || '').trim();
-    if (c.length < 8) { this.found = null; return; }
+    if (c.length < 8 || this.productId) { this.found = null; return; }
     this.lastCode = c;
     this.api.studioLookup(c).subscribe({
-      next: r => { this.found = r; this.hint = r.owned ? 'Produit déjà au catalogue.' : 'Produit trouvé.'; },
+      next: r => {
+        if (!r?.productId) { this.found = null; return; }
+        this.found = r;
+        this.hint = r.owned ? 'Produit déjà au catalogue.' : 'Produit trouvé.';
+      },
       error: () => { this.found = null; }
     });
   }
@@ -389,9 +394,15 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   }
 }
 
-function bust(url: string) {
+function cleanUrl(url: string) {
   if (!url) return url;
-  return url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+  return url.split('#')[0].split('?')[0];
+}
+
+function bust(url: string) {
+  const base = cleanUrl(url);
+  if (!base) return url;
+  return base + '?v=' + Date.now();
 }
 
 async function toJpeg(file: File): Promise<File> {
