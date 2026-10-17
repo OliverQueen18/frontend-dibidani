@@ -60,7 +60,9 @@ export class ApiService {
   dashboard(from?: string, to?: string, all = false) { return this.http.get<any>(`${this.base}/admin/dashboard`, {params: this.params({from, to, all: all || undefined})}); }
   reports(from?: string, to?: string, all = false) { return this.http.get<any>(`${this.base}/admin/reports`, {params: this.params({from, to, all: all || undefined})}); }
   exportReport(from?: string, to?: string, all = false) { return this.http.get(`${this.base}/admin/reports/export.csv`, {params: this.params({from, to, all: all || undefined}), responseType: 'blob'}); }
-  adminProducts(q = '', page = 0) { return this.http.get<any>(`${this.base}/admin/products`, {params: {q, page, size: 50}}); }
+  adminProducts(filters: Record<string, string | number | boolean | undefined> = {}, page = 0, size = 20) {
+    return this.http.get<any>(`${this.base}/admin/products`, {params: this.params({...filters, page, size})});
+  }
   adminProduct(id: number) { return this.http.get<any>(`${this.base}/admin/products/${id}`); }
   saveProduct(body: any, id?: number) {
     return id ? this.http.put<any>(`${this.base}/admin/products/${id}`, body) : this.http.post<any>(`${this.base}/admin/products`, body);

@@ -68,11 +68,11 @@ interface Shot {
     </div>
     <p class="msg" [class.bad]="s.status==='failed'">{{label(s)}}</p>
     <div class="tools" *ngIf="current===i">
-      <button type="button" (click)="run(s,{removeBackground:true,whiteBackground:true,enhance:true,watermark:true,recenter:true})" [disabled]="busy(s)">Améliorer automatiquement</button>
-      <button type="button" class="ghost" (click)="run(s,{whiteBackground:true,removeBackground:true,recenter:true})" [disabled]="busy(s)">Fond blanc</button>
-      <button type="button" class="ghost" (click)="run(s,{recenter:true,whiteBackground:true})" [disabled]="busy(s)">Recentrer</button>
-      <button type="button" class="ghost" (click)="run(s,{watermark:true})" [disabled]="busy(s)">Ajouter signature</button>
-      <button type="button" class="ghost" (click)="restart(s)" [disabled]="busy(s)">Recommencer</button>
+      <button type="button" (click)="run(s,{removeBackground:true,whiteBackground:true,enhance:true,watermark:true,recenter:true,force:true})" [disabled]="s.status==='uploading'">Améliorer automatiquement</button>
+      <button type="button" class="ghost" (click)="run(s,{whiteBackground:true,removeBackground:true,recenter:true,watermark:false,force:true})" [disabled]="s.status==='uploading'">Fond blanc</button>
+      <button type="button" class="ghost" (click)="run(s,{recenter:true,whiteBackground:true,force:true})" [disabled]="s.status==='uploading'">Recentrer</button>
+      <button type="button" class="ghost" (click)="run(s,{watermark:true,whiteBackground:true,removeBackground:true,recenter:true,force:true})" [disabled]="s.status==='uploading'">Ajouter signature</button>
+      <button type="button" class="ghost" (click)="restart(s)" [disabled]="s.status==='uploading'">Recommencer</button>
       <label>Zoom <input type="range" min="70" max="160" [(ngModel)]="zoom" (change)="applyCrop(s)"></label>
       <label>Horizontal <input type="range" min="-30" max="30" [(ngModel)]="offX" (change)="applyCrop(s)"></label>
       <label>Vertical <input type="range" min="-30" max="30" [(ngModel)]="offY" (change)="applyCrop(s)"></label>
@@ -214,7 +214,16 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
       const shot: Shot = { key: file.name + Date.now(), originalUrl: url, previewUrl: url, status: 'uploading', message: '', file };
       this.shots = [...this.shots, shot];
       this.current = this.shots.length - 1;
-      this.upload(shot, file);
+      this.prepareAndUpload(shot, file);
+    }
+  }
+
+  private async prepareAndUpload(shot: Shot, file: File) {
+    try {
+      this.upload(shot, await toJpeg(file));
+    } catch {
+      shot.status = 'failed';
+      shot.message = 'Image illisible. Utilisez un JPEG ou un PNG.';
     }
   }
 
@@ -247,7 +256,11 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
       ...extra
     };
     this.api.studioProcess(body).subscribe({
-      next: job => { shot.jobId = job.id; this.watch(shot); },
+      next: job => {
+        shot.jobId = job.id;
+        this.applyJob(shot, job);
+        if (job.status !== 'COMPLETED' && job.status !== 'FAILED') this.watch(shot);
+      },
       error: e => { shot.status = 'failed'; shot.message = e.error?.message || 'Traitement impossible.'; }
     });
   }
@@ -262,17 +275,22 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
     this.run(shot, { removeBackground: true, whiteBackground: true, enhance: true, watermark: true, recenter: true, zoom: 1, offsetX: 0, offsetY: 0, force: true });
   }
 
+  private applyJob(shot: Shot, job: any) {
+    shot.status = job.status === 'COMPLETED' ? 'ready' : job.status === 'FAILED' ? 'failed' : 'processing';
+    shot.message = job.message || '';
+    const url = job.asset?.masterUrl || job.asset?.jpegUrl;
+    if (url) {
+      shot.previewUrl = bust(url);
+      shot.catalogUrl = job.asset.catalogUrl || url;
+    }
+  }
+
   private watch(shot: Shot) {
     if (!shot.jobId) return;
     this.polls.get(shot.jobId)?.unsubscribe();
     const tick = () => this.api.studioJob(shot.jobId!).subscribe({
       next: job => {
-        shot.status = job.status === 'COMPLETED' ? 'ready' : job.status === 'FAILED' ? 'failed' : 'processing';
-        shot.message = job.message || '';
-        if (job.asset?.masterUrl || job.asset?.jpegUrl) {
-          shot.previewUrl = job.asset.masterUrl || job.asset.jpegUrl;
-          shot.catalogUrl = job.asset.catalogUrl || shot.previewUrl;
-        }
+        this.applyJob(shot, job);
         if (job.status === 'COMPLETED' || job.status === 'FAILED') {
           this.polls.get(shot.jobId!)?.unsubscribe();
           this.polls.delete(shot.jobId!);
@@ -328,8 +346,10 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   }
 
   lookup(code: string) {
-    this.lastCode = code;
-    this.api.studioLookup(code).subscribe({
+    const c = (code || '').trim();
+    if (c.length < 8) { this.found = null; return; }
+    this.lastCode = c;
+    this.api.studioLookup(c).subscribe({
       next: r => { this.found = r; this.hint = r.owned ? 'Produit déjà au catalogue.' : 'Produit trouvé.'; },
       error: () => { this.found = null; }
     });
@@ -367,4 +387,21 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
     this.stream = undefined;
     this.live = false;
   }
+}
+
+function bust(url: string) {
+  if (!url) return url;
+  return url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+}
+
+async function toJpeg(file: File): Promise<File> {
+  if (file.type === 'image/jpeg' || file.type === 'image/jpg') return file;
+  const bmp = await createImageBitmap(file);
+  const c = document.createElement('canvas');
+  c.width = bmp.width;
+  c.height = bmp.height;
+  c.getContext('2d')!.drawImage(bmp, 0, 0);
+  const blob = await new Promise<Blob | null>(resolve => c.toBlob(resolve, 'image/jpeg', 0.92));
+  if (!blob) return file;
+  return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
 }
