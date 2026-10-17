@@ -57,9 +57,9 @@ export class ApiService {
   duplicateSellerProduct(id: number) { return this.http.post<any>(`${this.base}/seller/products/${id}/duplicate`, {}); }
   sellerOrders() { return this.http.get<any[]>(`${this.base}/seller/orders`); }
 
-  dashboard() { return this.http.get<any>(`${this.base}/admin/dashboard`); }
-  reports(from?: string, to?: string) { return this.http.get<any>(`${this.base}/admin/reports`, {params: this.params({from, to})}); }
-  exportReport() { return this.http.get(`${this.base}/admin/reports/export.csv`, {responseType: 'blob'}); }
+  dashboard(from?: string, to?: string, all = false) { return this.http.get<any>(`${this.base}/admin/dashboard`, {params: this.params({from, to, all: all || undefined})}); }
+  reports(from?: string, to?: string, all = false) { return this.http.get<any>(`${this.base}/admin/reports`, {params: this.params({from, to, all: all || undefined})}); }
+  exportReport(from?: string, to?: string, all = false) { return this.http.get(`${this.base}/admin/reports/export.csv`, {params: this.params({from, to, all: all || undefined}), responseType: 'blob'}); }
   adminProducts(q = '', page = 0) { return this.http.get<any>(`${this.base}/admin/products`, {params: {q, page, size: 50}}); }
   adminProduct(id: number) { return this.http.get<any>(`${this.base}/admin/products/${id}`); }
   saveProduct(body: any, id?: number) {

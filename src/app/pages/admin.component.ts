@@ -4,12 +4,14 @@ import {RouterLink} from '@angular/router';
 import {ApiService} from '../core/api.service';
 import {AuthService} from '../core/auth.service';
 import {ProductPublishService} from '../core/product-publish.service';
+import {PeriodRange} from '../core/period';
 import {Product, SocialChannel} from '../core/models';
+import {PeriodFilterComponent} from '../shared/period-filter.component';
 import {ADMIN_PAGE_STYLES} from './admin-ui';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, PeriodFilterComponent],
   template: `
 <div class="page">
   <header>
@@ -19,16 +21,23 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
       <a class="btn ghost" routerLink="/" target="_blank" rel="noopener">Voir le site</a>
     </div>
   </header>
+  <app-period-filter (periodChange)="onPeriod($event)"></app-period-filter>
   <div class="kpis">
-    <div><small>Chiffre d'affaires</small><b>{{money(kpis.revenue)}}</b></div>
-    <div><small>Commandes</small><b>{{kpis.orders || 0}}</b></div>
+    <div><small>Chiffre d'affaires</small><b>{{money(kpis.revenue)}}</b><em *ngIf="kpis.revenuePrevious != null">vs {{money(kpis.revenuePrevious)}} avant</em></div>
+    <div><small>Commandes</small><b>{{kpis.orders || 0}}</b><em *ngIf="kpis.ordersPrevious != null">vs {{kpis.ordersPrevious}} avant</em></div>
+    <div><small>Panier moyen</small><b>{{money(kpis.averageBasket)}}</b></div>
+    <div><small>Nouveaux clients</small><b>{{kpis.newCustomers || 0}}</b></div>
+  </div>
+  <div class="kpis secondary">
     <div><small>Clients</small><b>{{kpis.totalCustomers || dash.clients || 0}}</b></div>
-    <div><small>Produits</small><b>{{kpis.activeProducts || dash.products || 0}}</b></div>
+    <div><small>Produits actifs</small><b>{{kpis.activeProducts || dash.products || 0}}</b></div>
+    <div><small>Articles vendus</small><b>{{kpis.unitsSold || 0}}</b></div>
+    <div><small>Ventes du jour</small><b>{{money(kpis.salesToday)}}</b></div>
   </div>
   <div class="grid">
     <div class="panel">
       <h2>Ventes</h2>
-      <div class="chart"><i *ngFor="let h of bars" [style.height.%]="h"></i></div>
+      <div class="chart"><i *ngFor="let h of bars" [style.height.%]="h.height" [title]="h.label"></i></div>
     </div>
     <div class="panel">
       <h2>Commandes récentes</h2>
@@ -76,6 +85,8 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
 .head-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .soc button{margin-right:3px;border:0;background:#087a47;color:#fff;border-radius:5px;padding:4px 6px;font-size:10px;font-weight:800;cursor:pointer}
 .products{padding:16px}
+.kpis em{display:block;margin-top:4px;color:#6a7c75;font-size:11px;font-style:normal;font-weight:600}
+.kpis.secondary b{font-size:18px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 `]
 })
@@ -83,8 +94,9 @@ export class AdminComponent implements OnInit {
   dash: any = {};
   products: Product[] = [];
   recent: any[] = [];
-  bars = [38, 55, 42, 67, 58, 75, 65, 82, 74, 92, 85, 100];
+  bars: {height: number; label: string}[] = [];
   pubMsg = '';
+  period: PeriodRange | null = null;
   constructor(private api: ApiService, public auth: AuthService, public productPublish: ProductPublishService) {
     effect(() => {
       const t = this.productPublish.lastSavedAt();
@@ -94,17 +106,16 @@ export class AdminComponent implements OnInit {
   get kpis() { return this.dash.kpis || this.dash || {}; }
   money(v: any) { return Number(v || 0).toLocaleString('fr-FR') + ' FCFA'; }
   ngOnInit() {
-    this.api.dashboard().subscribe(d => {
+    if (this.auth.can('CATALOG_VIEW')) this.api.adminProducts().subscribe(p => this.products = p.content || p);
+  }
+  onPeriod(p: PeriodRange) {
+    this.period = p;
+    this.api.dashboard(p.from, p.to, p.key === 'all').subscribe(d => {
       this.dash = d;
       this.recent = d.latestOrders || [];
-      const days = d.salesByDay || [];
-      if (days.length) {
-        const max = Math.max(...days.map((x: any) => Number(x.revenue || 0)), 1);
-        this.bars = days.map((x: any) => Math.max(8, Math.round(Number(x.revenue || 0) / max * 100)));
-      }
+      this.bars = toBars(d.salesByDay || []);
+      if (this.auth.can('ORDERS_MANAGE') && !this.recent.length) this.api.adminOrders({size: 5}).subscribe(o => this.recent = o.content || o);
     });
-    if (this.auth.can('CATALOG_VIEW')) this.api.adminProducts().subscribe(p => this.products = p.content || p);
-    if (this.auth.can('ORDERS_MANAGE') && !this.recent.length) this.api.adminOrders({size: 5}).subscribe(o => this.recent = o.content || o);
   }
   publish(p: Product, channel: SocialChannel) {
     this.pubMsg = 'Publication de ' + p.name + '…';
@@ -117,4 +128,27 @@ export class AdminComponent implements OnInit {
       error: e => this.pubMsg = e.error?.message || 'Publication impossible.'
     });
   }
+}
+
+function toBars(days: {date?: string; revenue?: number}[]): {height: number; label: string}[] {
+  if (!days.length) return [];
+  const src = days.length > 45 ? bucketDays(days, 30) : days;
+  const max = Math.max(...src.map(x => Number(x.revenue || 0)), 1);
+  return src.map(x => ({
+    height: Math.max(8, Math.round(Number(x.revenue || 0) / max * 100)),
+    label: (x.date || '') + ' · ' + Number(x.revenue || 0).toLocaleString('fr-FR') + ' FCFA'
+  }));
+}
+
+function bucketDays(days: {date?: string; revenue?: number}[], maxBars: number): {date?: string; revenue?: number}[] {
+  const size = Math.ceil(days.length / maxBars);
+  const out: {date?: string; revenue?: number}[] = [];
+  for (let i = 0; i < days.length; i += size) {
+    const slice = days.slice(i, i + size);
+    out.push({
+      date: slice[0].date,
+      revenue: slice.reduce((s, x) => s + Number(x.revenue || 0), 0)
+    });
+  }
+  return out;
 }
