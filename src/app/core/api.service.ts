@@ -151,10 +151,14 @@ export class ApiService {
     return this.http.delete(`${this.base}/admin/uploads`, {params: {url}});
   }
   studioUpload(file: File, productId?: number) {
-    const fd = new FormData();
-    fd.append('file', file);
-    if (productId) fd.append('productId', String(productId));
-    return this.http.post<any>(`${this.base}/products/images/upload`, fd);
+    return from(prepareImageUpload(file)).pipe(
+      switchMap(prepared => {
+        const fd = new FormData();
+        fd.append('file', prepared);
+        if (productId) fd.append('productId', String(productId));
+        return this.http.post<any>(`${this.base}/products/images/upload`, fd);
+      })
+    );
   }
   studioProcess(body: any) { return this.http.post<any>(`${this.base}/products/images/process`, body); }
   studioJob(id: number) { return this.http.get<any>(`${this.base}/products/images/jobs/${id}`); }

@@ -22,7 +22,8 @@
               {"glob": "**/*", "input": "public"},
               {"glob": "**/*", "input": "src/assets", "output": "assets"}
             ],
-            "styles": ["src/styles.css"]
+            "styles": ["src/styles.css"],
+            "allowedCommonJsDependencies": ["html5-qrcode"]
           }
         },
         "serve": {

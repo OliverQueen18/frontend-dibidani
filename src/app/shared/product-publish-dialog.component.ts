@@ -1,6 +1,7 @@
 import { Component, ElementRef, HostListener, ViewChild, effect, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Html5Qrcode } from 'html5-qrcode';
 import { ApiService } from '../core/api.service';
 import { uploadErrorMessage } from '../core/image-upload';
 import { AuthService } from '../core/auth.service';
@@ -210,7 +211,7 @@ type QuickKind = 'category' | 'brand' | 'unit' | null;
       </ng-container>
     </footer>
 
-    <div class="scan" *ngIf="scanning">
+    <div class="scan" [class.on]="scanning">
       <div class="scan-head">
         <b>Scanner un code</b>
         <button type="button" class="x" (click)="stopScan()" aria-label="Fermer le scanner">×</button>
@@ -218,7 +219,9 @@ type QuickKind = 'category' | 'brand' | 'unit' | null;
       <p>{{scanHint}}</p>
       <div id="dibidani-reader"></div>
       <div class="scan-actions">
-        <button type="button" class="ghost" (click)="pickShot()">📷 Photo du code</button>
+        <label class="ghost">📷 Photo du code
+          <input type="file" accept="image/*" capture="environment" hidden (change)="scanPhoto($event)">
+        </label>
         <button type="button" class="ghost" (click)="stopScan()">Fermer</button>
       </div>
     </div>
@@ -293,13 +296,14 @@ footer .ghost,.scan-actions .ghost{background:#fff;color:#087a47;border:1px soli
 footer button:disabled,.quick-actions button:disabled{opacity:.6;cursor:wait}
 .err{color:#b42318;margin:0 20px 8px;font-size:13px}
 .ok{color:#087a47;margin:0 20px 8px;font-size:13px}
-.scan{position:absolute;inset:0;background:#0a3026;z-index:6;display:flex;flex-direction:column;padding:14px;color:#fff}
+.scan{position:absolute;inset:0;background:#0a3026;z-index:6;display:flex;flex-direction:column;padding:14px;padding-bottom:max(14px,env(safe-area-inset-bottom));color:#fff;visibility:hidden;pointer-events:none}
+.scan.on{visibility:visible;pointer-events:auto}
 .scan-head{display:flex;justify-content:space-between;align-items:center}
 .scan-head .x{background:#1a4a3c;color:#fff}
 .scan p{font-size:13px;color:#c8ded6}
 #dibidani-reader{flex:1;min-height:240px;border-radius:12px;overflow:hidden;background:#06241c}
 .scan-actions{display:flex;gap:8px;margin-top:10px}
-.scan-actions button{flex:1;border-radius:8px;padding:10px;font-weight:800;cursor:pointer}
+.scan-actions button,.scan-actions label{flex:1;border-radius:8px;padding:10px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;font:inherit}
 @media(max-width:760px){
   .scrim{padding:0;align-items:stretch}
   .sheet{width:100%;max-height:100%;border-radius:0}
@@ -307,6 +311,7 @@ footer button:disabled,.quick-actions button:disabled{opacity:.6;cursor:wait}
   .preview{display:none}
   .combo{flex-wrap:wrap}
   .cam{flex:1;padding:10px}
+  #dibidani-reader{min-height:min(52vh,360px)}
 }
 `]
 })
@@ -328,7 +333,7 @@ export class ProductPublishDialogComponent {
   scanHint = '';
   @ViewChild('shot') shotInput?: ElementRef<HTMLInputElement>;
   private refsLoaded = false;
-  private html5: any = null;
+  private html5: Html5Qrcode | null = null;
 
   constructor(private api: ApiService, public auth: AuthService, public publish: ProductPublishService) {
     effect(() => {
@@ -436,12 +441,11 @@ export class ProductPublishDialogComponent {
   pickShot() { this.shotInput?.nativeElement.click(); }
 
   startScan() {
+    if (this.scanning) return;
     this.scanning = true;
     this.scanHint = 'Pointez un code-barres ou un QR code…';
     this.err = '';
-    loadHtml5Qrcode().then(() => setTimeout(() => this.runScanner(), 40)).catch(() => {
-      this.scanHint = 'Scanner indisponible. Prenez une photo du code.';
-    });
+    void this.runScanner();
   }
 
   scanPhoto(ev: Event) {
@@ -654,19 +658,31 @@ export class ProductPublishDialogComponent {
     }
   }
 
-  private runScanner() {
+  private async runScanner() {
     const el = document.getElementById('dibidani-reader');
     if (!el || !this.scanning) return;
-    const Html5Qrcode = (window as any).Html5Qrcode;
+    try { this.html5?.clear(); } catch { /* already stopped */ }
     this.html5 = new Html5Qrcode('dibidani-reader');
-    this.html5.start(
-      { facingMode: 'environment' },
-      { fps: 8, qrbox: { width: 240, height: 160 } },
-      (text: string) => this.onScanned(text),
-      () => {}
-    ).catch(() => {
+    const config = {
+      fps: 8,
+      qrbox: (w: number, h: number) => ({
+        width: Math.max(120, Math.min(240, Math.floor(w * 0.8))),
+        height: Math.max(80, Math.min(160, Math.floor(h * 0.5)))
+      })
+    };
+    const onRead = (text: string) => this.onScanned(text);
+    try {
+      await this.html5.start({ facingMode: 'environment' }, config, onRead, () => {});
+      return;
+    } catch { /* try a specific camera next */ }
+    try {
+      const cams = await Html5Qrcode.getCameras();
+      const back = cams.find(c => /back|arriere|rear|environment|world/i.test(c.label)) || cams[cams.length - 1];
+      if (!back) throw new Error('no-cam');
+      await this.html5.start(back.id, config, onRead, () => {});
+    } catch {
       this.scanHint = 'Caméra refusée ou indisponible. Prenez une photo du code.';
-    });
+    }
   }
 
   private onScanned(raw: string) {
@@ -693,23 +709,21 @@ export class ProductPublishDialogComponent {
   }
 
   private scanFileFallback(file: File) {
-    loadHtml5Qrcode().then(() => {
-      const id = 'dibidani-reader-tmp';
-      let el = document.getElementById(id);
-      if (!el) {
-        el = document.createElement('div');
-        el.id = id;
-        el.style.display = 'none';
-        document.body.appendChild(el);
-      }
-      const reader = new (window as any).Html5Qrcode(id);
-      reader.scanFile(file, false).then((text: string) => this.onScanned(text)).catch(() => {
-        this.err = 'Aucun code détecté. Saisissez-le à la main.';
-      }).finally(() => {
-        reader.clear().catch(() => {});
-        el?.remove();
-      });
-    }).catch(() => { this.err = 'Impossible de lire ce code. Saisissez-le à la main.'; });
+    const id = 'dibidani-reader-tmp';
+    let el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = id;
+      el.style.cssText = 'position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none';
+      document.body.appendChild(el);
+    }
+    const reader = new Html5Qrcode(id);
+    reader.scanFile(file, false).then((text: string) => this.onScanned(text)).catch(() => {
+      this.err = 'Aucun code détecté. Saisissez-le à la main.';
+    }).finally(() => {
+      try { reader.clear(); } catch { /* already gone */ }
+      el?.remove();
+    });
   }
 }
 
@@ -771,14 +785,3 @@ function normalizeCode(raw: string) {
   return t.replace(/\s+/g, '').slice(0, 255);
 }
 
-function loadHtml5Qrcode() {
-  if ((window as any).Html5Qrcode) return Promise.resolve();
-  return new Promise<void>((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject();
-    document.head.appendChild(s);
-  });
-}

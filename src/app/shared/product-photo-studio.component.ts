@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription, interval } from 'rxjs';
 import { ApiService } from '../core/api.service';
+import { uploadErrorMessage } from '../core/image-upload';
 
 type ShotStatus = 'uploading' | 'queued' | 'processing' | 'ready' | 'failed';
 
@@ -26,14 +27,16 @@ interface Shot {
 <div class="studio">
   <div class="drop" [class.on]="drag" [class.full]="shots.length>=12"
        (dragover)="onDrag($event,true)" (dragleave)="onDrag($event,false)" (drop)="onDrop($event)">
-    <input #files type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" multiple hidden (change)="pickFiles($event)">
-    <input #cam type="file" accept="image/*" capture="environment" hidden (change)="pickFiles($event)">
     <b>Studio photo Dibidani</b>
     <span>Prenez une photo ou importez des clichés. Fond blanc, cadrage et signature sont appliqués automatiquement.</span>
     <div class="cta">
-      <button type="button" (click)="cam.click()">📷 Photographier</button>
-      <button type="button" class="ghost" (click)="files.click()">Importer</button>
-      <button type="button" class="ghost" (click)="startLiveCam()" *ngIf="!live">Caméra live</button>
+      <label class="btn">📷 Photographier
+        <input type="file" accept="image/*" capture="environment" hidden (change)="pickFiles($event)">
+      </label>
+      <label class="btn ghost">Importer
+        <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" multiple hidden (change)="pickFiles($event)">
+      </label>
+      <button type="button" class="ghost" (click)="startLiveCam()" *ngIf="!live && canLiveCam">Caméra live</button>
     </div>
   </div>
 
@@ -93,7 +96,7 @@ interface Shot {
 .drop b{display:block;color:#087a47;margin-bottom:4px}
 .drop span{font-size:12px;color:#6a7c75}
 .cta{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px}
-.cta button,.tools button,.row button{border:0;background:#087a47;color:#fff;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer}
+.cta button,.cta .btn,.tools button,.row button{border:0;background:#087a47;color:#fff;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer;font:inherit;display:inline-flex;align-items:center;justify-content:center;min-height:40px}
 .ghost{background:#fff !important;color:#087a47 !important;border:1px solid #c5ddd2 !important}
 .err{color:#b42318;font-size:13px;margin:0}.ok{color:#087a47;font-size:13px;margin:0}
 .lookup{font-size:13px;background:#eaf7f0;border-radius:8px;padding:8px}
@@ -112,7 +115,7 @@ interface Shot {
 .live{background:#0a3026;border-radius:12px;padding:10px;color:#fff}
 .live video{width:100%;max-height:280px;border-radius:8px;background:#06241c}
 .live-actions{display:flex;gap:8px;margin-top:8px}
-@media(max-width:640px){.compare img{height:120px}.cta button{flex:1}}
+@media(max-width:640px){.compare img{height:120px}.cta button,.cta .btn{flex:1;min-height:44px}}
 `]
 })
 export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
@@ -138,6 +141,12 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   private stream?: MediaStream;
 
   constructor(private api: ApiService) {}
+
+  get canLiveCam() {
+    return typeof navigator !== 'undefined'
+      && !!navigator.mediaDevices?.getUserMedia
+      && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  }
 
   ngOnChanges(ch: SimpleChanges) {
     if (ch['urls']) this.hydrateUrls();
@@ -215,16 +224,7 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
       const shot: Shot = { key: file.name + Date.now(), originalUrl: url, previewUrl: url, status: 'uploading', message: '', file };
       this.shots = [...this.shots, shot];
       this.current = this.shots.length - 1;
-      this.prepareAndUpload(shot, file);
-    }
-  }
-
-  private async prepareAndUpload(shot: Shot, file: File) {
-    try {
-      this.upload(shot, await toJpeg(file));
-    } catch {
-      shot.status = 'failed';
-      shot.message = 'Image illisible. Utilisez un JPEG ou un PNG.';
+      this.upload(shot, file);
     }
   }
 
@@ -234,7 +234,7 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
         shot.assetId = a.id;
         this.run(shot, { removeBackground: true, whiteBackground: true, enhance: true, watermark: true, recenter: true, force: true });
       },
-      error: e => { shot.status = 'failed'; shot.message = e.error?.message || 'Envoi impossible.'; }
+      error: e => { shot.status = 'failed'; shot.message = uploadErrorMessage(e); }
     });
   }
 
@@ -403,16 +403,4 @@ function bust(url: string) {
   const base = cleanUrl(url);
   if (!base) return url;
   return base + '?v=' + Date.now();
-}
-
-async function toJpeg(file: File): Promise<File> {
-  if (file.type === 'image/jpeg' || file.type === 'image/jpg') return file;
-  const bmp = await createImageBitmap(file);
-  const c = document.createElement('canvas');
-  c.width = bmp.width;
-  c.height = bmp.height;
-  c.getContext('2d')!.drawImage(bmp, 0, 0);
-  const blob = await new Promise<Blob | null>(resolve => c.toBlob(resolve, 'image/jpeg', 0.92));
-  if (!blob) return file;
-  return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
 }

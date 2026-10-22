@@ -10,20 +10,7 @@ export async function prepareImageUpload(file: File): Promise<File> {
   if (light) return file;
 
   try {
-    const bmp = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_EDGE / Math.max(bmp.width, bmp.height));
-    const w = Math.max(1, Math.round(bmp.width * scale));
-    const h = Math.max(1, Math.round(bmp.height * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      bmp.close();
-      return file;
-    }
-    ctx.drawImage(bmp, 0, 0, w, h);
-    bmp.close();
+    const canvas = await drawToCanvas(file);
     const keepPng = file.type === 'image/png' && file.size < 2_000_000;
     let blob = await toBlob(canvas, keepPng ? 'image/png' : 'image/jpeg', 0.84);
     if (blob && blob.size > PROXY_SAFE_BYTES && !keepPng) {
@@ -54,4 +41,37 @@ export function uploadErrorMessage(e: unknown): string {
 
 function toBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
   return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+}
+
+async function drawToCanvas(file: File): Promise<HTMLCanvasElement> {
+  try {
+    const bmp = await createImageBitmap(file);
+    const canvas = scaledCanvas(bmp.width, bmp.height);
+    canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close();
+    return canvas;
+  } catch {
+    const img = await loadImage(file);
+    const canvas = scaledCanvas(img.naturalWidth || img.width, img.naturalHeight || img.height);
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+}
+
+function scaledCanvas(width: number, height: number): HTMLCanvasElement {
+  const scale = Math.min(1, MAX_EDGE / Math.max(width, height, 1));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  return canvas;
+}
+
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('illisible')); };
+    img.src = url;
+  });
 }
