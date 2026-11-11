@@ -73,12 +73,6 @@ type Step = 'login' | 'register' | 'forgot' | 'otp' | 'reset';
         </ng-container>
 
         <small [class.ok]="ok">{{msg}}</small>
-        <div class="demo" *ngIf="step==='login' || step==='register'">
-          Client : client&#64;dibidani.ml / Client123!<br>
-          Vendeur : vendeur&#64;dibidani.ml / Vendeur123!<br>
-          Catalogue : catalogue&#64;dibidani.ml / Catalogue123!<br>
-          Google / Facebook : {{oauthHint}}
-        </div>
       </div>
     </main>
     <ng-template #oauthBtns>
@@ -142,12 +136,6 @@ export class LoginComponent implements OnInit {
   constructor(private auth: AuthService, private router: Router, private route: ActivatedRoute) {}
 
   get showOauth() { return !!(this.providers?.google?.enabled || this.providers?.facebook?.enabled); }
-  get oauthHint() {
-    if (this.providers?.mockEnabled && !this.providers.google?.clientId && !this.providers.facebook?.clientId) {
-      return 'mode démo (clés Google / Facebook non configurées).';
-    }
-    return 'utilisez les boutons ci-dessus.';
-  }
 
   ngOnInit() {
     if (this.auth.token()) { this.done(); return; }

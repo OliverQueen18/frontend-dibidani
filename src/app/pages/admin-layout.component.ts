@@ -36,6 +36,7 @@ import { ProductPublishDialogComponent } from '../shared/product-publish-dialog.
       <a routerLink="/admin/clients" routerLinkActive="on" *ngIf="auth.can('CUSTOMERS_VIEW')">Clients</a>
       <a routerLink="/admin/paiements" routerLinkActive="on" *ngIf="auth.can('PAYMENTS_MANAGE')">Paiements</a>
       <a routerLink="/admin/livraisons" routerLinkActive="on" *ngIf="auth.can('DELIVERIES_MANAGE')">Livraisons</a>
+      <a routerLink="/admin/livreurs" routerLinkActive="on" *ngIf="auth.can('DELIVERIES_MANAGE')">Livreurs</a>
       <a routerLink="/admin/zones" routerLinkActive="on" *ngIf="auth.can('DELIVERIES_MANAGE')">Zones</a>
       <a routerLink="/admin/publicites" routerLinkActive="on" *ngIf="auth.can('ADS_MANAGE')">Publicités</a>
       <a routerLink="/admin/promos" routerLinkActive="on" *ngIf="auth.can('PROMOTIONS_MANAGE')">Codes promo</a>

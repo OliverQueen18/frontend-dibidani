@@ -3,10 +3,12 @@ import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {ApiService} from '../core/api.service';
 import {ADMIN_PAGE_STYLES} from './admin-ui';
+import {AuthService} from '../core/auth.service';
+import {DeliveryAssignmentComponent, canAssignDelivery} from '../shared/delivery-assignment.component';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, DeliveryAssignmentComponent],
   template: `
 <div class="page">
   <header><div><h1>Commandes</h1><p>Vérifiez la disponibilité auprès des vendeurs, puis confirmez la commande au client. Dibidani ne gère pas de stock en entrepôt.</p></div></header>
@@ -23,12 +25,15 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
       <td>{{o.total | number:'1.0-0'}} FCFA</td>
       <td>{{o.paymentMethodLabel || o.paymentMethod}}</td>
       <td><span class="tag">{{o.statusLabel || o.status}}</span></td>
-      <td class="row-actions"><button type="button" (click)="open(o)">Ouvrir</button></td>
+      <td class="row-actions"><button type="button" (click)="open(o)" [disabled]="assigning">Ouvrir</button></td>
     </tr>
   </table>
   <div class="detail" *ngIf="selected">
     <h2>{{selected.orderNumber}} — {{selected.statusLabel}}</h2>
     <p>{{selected.customerName}} · {{selected.customerPhone}} · {{selected.deliveryAddress}}</p>
+    <p>Livreur : <b>{{selected.delivery?.courierName || 'Non assigné'}}</b> {{selected.delivery?.courierPhone}}</p>
+    <button type="button" class="btn" *ngIf="auth.can('DELIVERIES_MANAGE') && canAssign(selected.deliveryMethod,selected.status) && !assigning" (click)="assigning=true">{{selected.delivery?.courierName ? 'Réassigner à un livreur' : 'Assigner à un livreur'}}</button>
+    <app-delivery-assignment *ngIf="assigning" [orderId]="selected.id" [orderNumber]="selected.orderNumber" [delivery]="selected.delivery" (assigned)="deliveryAssigned($event)" (cancelled)="assigning=false"></app-delivery-assignment>
     <table>
       <tr><th>Article</th><th>Vendeur</th><th>Qté</th><th>Prix</th></tr>
       <tr *ngFor="let i of selected.items"><td>{{i.productName}}</td><td>{{i.vendorName || '—'}}</td><td>{{i.quantity}}</td><td>{{i.lineTotal | number:'1.0-0'}}</td></tr>
@@ -56,7 +61,13 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
 export class AdminOrdersComponent implements OnInit {
   rows: any[] = []; statuses: any[] = []; selected: any; status = ''; nextStatus = ''; comment = ''; note = ''; msg = ''; err = '';
   get canConfirm() { return (this.selected?.allowedTransitions || []).some((t: any) => t.status === 'CONFIRMED'); }
-  constructor(private api: ApiService) {}
+  assigning = false;
+  canAssign = canAssignDelivery;
+  constructor(private api: ApiService, public auth: AuthService) {}
+  deliveryAssigned(result: any) {
+    if (this.selected?.id === result.orderId) this.selected = {...this.selected, delivery: result.delivery};
+    this.assigning = false; this.msg = 'Commande assignée au livreur.'; this.err = '';
+  }
   ngOnInit() {
     this.api.orderStatuses().subscribe(s => this.statuses = s);
     this.load();

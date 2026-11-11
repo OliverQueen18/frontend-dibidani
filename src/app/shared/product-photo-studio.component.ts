@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Subscription, interval } from 'rxjs';
 import { ApiService } from '../core/api.service';
 import { uploadErrorMessage } from '../core/image-upload';
+import { PhotoEditorComponent } from './photo-editor.component';
 
 type ShotStatus = 'uploading' | 'queued' | 'processing' | 'ready' | 'failed';
 
@@ -22,7 +23,7 @@ interface Shot {
 @Component({
   selector: 'app-product-photo-studio',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PhotoEditorComponent],
   template: `
 <div class="studio">
   <div class="drop" [class.on]="drag" [class.full]="shots.length>=12"
@@ -42,6 +43,7 @@ interface Shot {
 
   <p class="err" *ngIf="err">{{err}}</p>
   <p class="ok" *ngIf="hint">{{hint}}</p>
+  <app-photo-editor *ngIf="editorSource" [src]="editorSource" (closed)="editorSource=''" (saved)="saveEdit($event)"></app-photo-editor>
   <p class="lookup" *ngIf="found">Fiche trouvée : <b>{{found.name}}</b> ({{found.sku}})
     <button type="button" class="ghost" (click)="useFound()">Préremplir</button>
   </p>
@@ -71,6 +73,8 @@ interface Shot {
     </div>
     <p class="msg" [class.bad]="s.status==='failed'">{{label(s)}}</p>
     <div class="tools" *ngIf="current===i">
+      <button type="button" (click)="openEditor(s.originalUrl)" [disabled]="busy(s)">Retoucher l’original</button>
+      <button type="button" class="ghost" (click)="openEditor(s.previewUrl)" [disabled]="busy(s) || !s.previewUrl">Retoucher le résultat</button>
       <button type="button" (click)="run(s,{removeBackground:true,whiteBackground:true,enhance:true,watermark:true,recenter:true,force:true})" [disabled]="s.status==='uploading'">Améliorer automatiquement</button>
       <button type="button" class="ghost" (click)="run(s,{whiteBackground:true,removeBackground:true,recenter:true,watermark:false,force:true})" [disabled]="s.status==='uploading'">Fond blanc</button>
       <button type="button" class="ghost" (click)="run(s,{recenter:true,whiteBackground:true,force:true})" [disabled]="s.status==='uploading'">Recentrer</button>
@@ -136,6 +140,8 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   offX = 0;
   offY = 0;
   live = false;
+  editorSource = '';
+  private localUrls = new Set<string>();
   private lastCode = '';
   private polls = new Map<number, Subscription>();
   private stream?: MediaStream;
@@ -156,6 +162,7 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
 
   ngOnDestroy() {
     this.polls.forEach(s => s.unsubscribe());
+    this.localUrls.forEach(url => URL.revokeObjectURL(url));
     this.stopLive();
   }
 
@@ -221,11 +228,43 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
       if (this.shots.length >= 12) break;
       if (!file.type.startsWith('image/') && !/\.(heic|heif)$/i.test(file.name)) continue;
       const url = URL.createObjectURL(file);
+      this.localUrls.add(url);
       const shot: Shot = { key: file.name + Date.now(), originalUrl: url, previewUrl: url, status: 'uploading', message: '', file };
       this.shots = [...this.shots, shot];
       this.current = this.shots.length - 1;
       this.upload(shot, file);
     }
+  }
+
+  openEditor(url: string) {
+    if (this.editorSource) {
+      this.hint = 'Fermez la retouche en cours avant de choisir une autre photo.';
+      return;
+    }
+    this.editorSource = url;
+    this.hint = '';
+  }
+
+  saveEdit(file: File) {
+    if (this.shots.length >= 12) {
+      this.err = 'Retirez une photo avant d’ajouter la version retouchée (12 photos maximum). Vous pouvez aussi la télécharger en PNG.';
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    this.localUrls.add(url);
+    const shot: Shot = {key: 'edit-' + Date.now(), originalUrl: url, previewUrl: url, status: 'uploading', message: '', file};
+    this.shots = [...this.shots, shot];
+    this.current = this.shots.length - 1;
+    this.editorSource = '';
+    this.err = '';
+    this.api.studioUpload(file, this.productId || undefined).subscribe({
+      next: a => {
+        shot.assetId = a.id;
+        this.run(shot, {removeBackground: false, whiteBackground: true, enhance: false,
+          watermark: false, recenter: true, zoom: 1, offsetX: 0, offsetY: 0, force: true});
+      },
+      error: e => { shot.status = 'failed'; shot.message = uploadErrorMessage(e); }
+    });
   }
 
   private upload(shot: Shot, file: File) {

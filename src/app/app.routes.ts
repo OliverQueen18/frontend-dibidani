@@ -20,6 +20,7 @@ import { AdminCustomersComponent } from './pages/admin-customers.component';
 import { AdminOrdersComponent } from './pages/admin-orders.component';
 import { AdminPaymentsComponent } from './pages/admin-payments.component';
 import { AdminDeliveriesComponent } from './pages/admin-deliveries.component';
+import { AdminCouriersComponent } from './pages/admin-couriers.component';
 import { AdminAdsComponent } from './pages/admin-ads.component';
 import { AdminPromosComponent } from './pages/admin-promos.component';
 import { AdminZonesComponent } from './pages/admin-zones.component';
@@ -57,6 +58,7 @@ export const routes: Routes = [
       { path: 'clients', component: AdminCustomersComponent, canActivate: [permissionGuard('CUSTOMERS_VIEW', 'CUSTOMERS_MANAGE')] },
       { path: 'paiements', component: AdminPaymentsComponent, canActivate: [permissionGuard('PAYMENTS_MANAGE')] },
       { path: 'livraisons', component: AdminDeliveriesComponent, canActivate: [permissionGuard('DELIVERIES_MANAGE')] },
+      { path: 'livreurs', component: AdminCouriersComponent, canActivate: [permissionGuard('DELIVERIES_MANAGE')] },
       { path: 'zones', component: AdminZonesComponent, canActivate: [permissionGuard('DELIVERIES_MANAGE')] },
       { path: 'publicites', component: AdminAdsComponent, canActivate: [permissionGuard('ADS_MANAGE')] },
       { path: 'promos', component: AdminPromosComponent, canActivate: [permissionGuard('PROMOTIONS_MANAGE')] },

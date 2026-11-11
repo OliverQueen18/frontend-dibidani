@@ -125,6 +125,10 @@ export class ApiService {
   paymentStats() { return this.http.get<any[]>(`${this.base}/admin/payments/stats`); }
   deliveries(page = 0) { return this.http.get<any>(`${this.base}/admin/deliveries`, {params: {page, size: 30}}); }
   couriers() { return this.http.get<any[]>(`${this.base}/admin/couriers`); }
+  manageCouriers(q = '', page = 0) { return this.http.get<any>(`${this.base}/admin/couriers/manage`, {params: {q, page, size: 30}}); }
+  saveCourier(body: any, id?: number) {
+    return id ? this.http.put<any>(`${this.base}/admin/couriers/${id}`, body) : this.http.post<any>(`${this.base}/admin/couriers`, body);
+  }
   promoCodes() { return this.http.get<any[]>(`${this.base}/admin/promo-codes`); }
   savePromo(body: any, id?: number) {
     return id ? this.http.put<any>(`${this.base}/admin/promo-codes/${id}`, body) : this.http.post<any>(`${this.base}/admin/promo-codes`, body);
