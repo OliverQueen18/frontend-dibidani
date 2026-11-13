@@ -51,11 +51,14 @@ export class OcrCaptureComponent implements OnDestroy {
       const context = canvas.getContext('2d')!;
       context.globalCompositeOperation = 'destination-over';
       context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
-      const source = canvas.toDataURL('image/png');
+      // Avoid base64 strings and the large intermediate JS array on mobile.
+      const source = await new Promise<Blob>((resolve, reject) => canvas.toBlob(
+        blob => blob ? resolve(blob) : reject(new Error('Image encoding failed')), 'image/png'));
+      canvas.width = 1; canvas.height = 1;
       const { createWorker } = await import('tesseract.js');
       if (this.destroyed) return;
       this.phase = 'Chargement du lecteur et des langues';
-      const assets = new URL('assets/ocr/', document.baseURI).href;
+      const assets = new URL('assets/ocr/v2/', document.baseURI).href;
       let rejectEngine!: (error: unknown) => void;
       const engineFailure = new Promise<never>((_, reject) => { rejectEngine = reject; });
       timeout = setTimeout(() => rejectEngine(new Error('OCR timeout')), 120000);
@@ -74,10 +77,15 @@ export class OcrCaptureComponent implements OnDestroy {
       if (this.destroyed) return;
       this.text = result.data.text.trim();
       if (!this.text) this.error = 'Aucun texte détecté. Essayez une photo plus nette et bien éclairée.';
-    } catch {
+    } catch (cause) {
+      const detail = String(cause instanceof Error ? cause.message : cause);
       if (!this.destroyed) this.error = this.phase === 'Préparation de la photo'
         ? 'Photo illisible. Utilisez une photo JPEG, PNG ou WebP (convertissez les photos HEIC en JPEG).'
-        : 'Le lecteur de texte n’a pas pu démarrer ou terminer. Rechargez la page et réessayez avec une photo recadrée sur le texte.';
+        : detail.includes('OCR timeout')
+          ? 'La lecture a dépassé deux minutes. Recadrez la photo sur le texte et réessayez.'
+          : this.phase === 'Chargement du lecteur et des langues'
+            ? 'Le moteur OCR n’a pas pu se charger. Fermez cet onglet puis ouvrez à nouveau Dibidani pour charger la dernière version.'
+            : 'Le moteur OCR n’a pas pu lire cette image. Essayez une photo recadrée sur le texte.';
     } finally {
       cancelled = true;
       if (timeout) clearTimeout(timeout);

@@ -20,10 +20,10 @@
             "outputHashing": "all",
             "assets": [
               {"glob": "**/*", "input": "public"},
-              {"glob": "worker.min.js", "input": "node_modules/tesseract.js/dist", "output": "assets/ocr"},
-              {"glob": "tesseract-core*", "input": "node_modules/tesseract.js-core", "output": "assets/ocr"},
-              {"glob": "fra.traineddata.gz", "input": "node_modules/@tesseract.js-data/fra/4.0.0_best_int", "output": "assets/ocr/lang"},
-              {"glob": "eng.traineddata.gz", "input": "node_modules/@tesseract.js-data/eng/4.0.0_best_int", "output": "assets/ocr/lang"},
+              {"glob": "worker.min.js", "input": "node_modules/tesseract.js/dist", "output": "assets/ocr/v2"},
+              {"glob": "tesseract-core*", "input": "node_modules/tesseract.js-core", "output": "assets/ocr/v2"},
+              {"glob": "fra.traineddata.gz", "input": "node_modules/@tesseract.js-data/fra/4.0.0_best_int", "output": "assets/ocr/v2/lang"},
+              {"glob": "eng.traineddata.gz", "input": "node_modules/@tesseract.js-data/eng/4.0.0_best_int", "output": "assets/ocr/v2/lang"},
               {"glob": "**/*", "input": "src/assets", "output": "assets"}
             ],
             "styles": ["src/styles.css"],
