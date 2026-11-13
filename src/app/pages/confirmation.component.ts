@@ -42,6 +42,9 @@ export class ConfirmationComponent implements OnInit {
     const s = this.order?.status;
     if (s === 'CONFIRMED') return 'Confirmée au client';
     if (s === 'PAID') return 'Payée — à confirmer';
+    if (s === 'PENDING_PAYMENT') return 'En attente du paiement';
+    if (s === 'PAYMENT_FAILED') return 'Paiement échoué';
+    if (s === 'CANCELLED') return 'Annulée';
     return 'Reçue — disponibilité à vérifier';
   }
   ngOnInit() {

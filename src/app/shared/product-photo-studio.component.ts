@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription, timer, exhaustMap } from 'rxjs';
 import { ApiService } from '../core/api.service';
-import { uploadErrorMessage } from '../core/image-upload';
+import { uploadErrorMessage, prepareImageUpload } from '../core/image-upload';
 import { PhotoEditorComponent } from './photo-editor.component';
 
 type ShotStatus = 'uploading' | 'queued' | 'processing' | 'ready' | 'failed';
@@ -46,6 +46,8 @@ interface Shot {
 
   <fieldset class="export-options" [disabled]="shotsBusy">
     <legend>Réglages du studio IA</legend>
+    <label><input type="checkbox" [(ngModel)]="compressPhotos"> Compresser les photos avant envoi (jusqu’à 40 Mo)</label>
+    <small>Avec compression, une copie allégée est envoyée et conservée dans le studio. Le fichier de votre appareil reste intact.</small>
     <label>Modèle local<select [(ngModel)]="model"><option *ngFor="let m of models" [value]="m.id">{{m.id}}</option></select></label>
     <label>Fond<select [(ngModel)]="background"><option value="white">Blanc</option><option value="transparent">Transparent</option><option value="gray">Gris clair</option><option value="custom">Personnalisé</option></select></label>
     <label *ngIf="background==='custom'">Couleur<input type="color" [(ngModel)]="backgroundColor"></label>
@@ -172,6 +174,7 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   preset = 1200; width = 1200; height = 1200; quality = 82;
   rotation = 0; brightness = 1; contrast = 1; refineEdges = false;
   maxBytes = 10 * 1024 * 1024;
+  compressPhotos = true;
   get shotsBusy() { return this.shots.some(s => this.busy(s)); }
   setDimensions() { if (this.preset) this.width = this.height = this.preset; }
   private localUrls = new Set<string>();
@@ -269,8 +272,9 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
     this.err = '';
     for (const file of list) {
       if (this.shots.length >= 12) break;
-      if (!['image/jpeg','image/png','image/webp','image/heic','image/heif','image/gif'].includes(file.type) || file.size > this.maxBytes) {
-        this.err = 'Formats acceptés : JPEG, PNG, WebP, GIF fixe ou HEIC. Maximum ' + Math.floor(this.maxBytes / 1024 / 1024) + ' Mo par photo.'; continue;
+      const limit = this.compressPhotos ? 40 * 1024 * 1024 : this.maxBytes;
+      if (!['image/jpeg','image/png','image/webp','image/heic','image/heif','image/gif'].includes(file.type) || file.size > limit) {
+        this.err = 'Formats acceptés : JPEG, PNG, WebP, GIF fixe ou HEIC. Maximum ' + Math.floor(limit / 1024 / 1024) + ' Mo par photo.'; continue;
       }
       const url = URL.createObjectURL(file);
       this.localUrls.add(url);
@@ -313,7 +317,15 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
     });
   }
 
-  private upload(shot: Shot, file: File) {
+  private async upload(shot: Shot, file: File) {
+    try {
+      if (this.compressPhotos) file = await prepareImageUpload(file, true);
+      if (this.destroyed) return;
+      if (file !== shot.file) {
+        const url = URL.createObjectURL(file); this.localUrls.add(url);
+        shot.originalUrl = url; shot.previewUrl = url; shot.file = file;
+      }
+    } catch (e) { shot.status='failed'; shot.message=uploadErrorMessage(e); return; }
     this.api.studioUpload(file, this.productId || undefined).subscribe({
       next: a => {
         shot.assetId = a.id;

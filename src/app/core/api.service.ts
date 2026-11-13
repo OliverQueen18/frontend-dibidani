@@ -25,7 +25,7 @@ export class ApiService {
   login(body: any) { return this.http.post<any>(`${this.base}/auth/login`, body); }
   register(body: any) { return this.http.post<any>(`${this.base}/auth/register`, body); }
   createOrder(body: any) { return this.http.post<Order>(`${this.base}/orders`, body); }
-  payOrder(n: string, body: any) { return this.http.post<Order>(`${this.base}/orders/${n}/pay`, body); }
+  payOrder(n: string, body: any) { return this.http.post<{order: Order; payment: {checkoutUrl?: string} | null; nextAction: string; message: string}>(`${this.base}/orders/${n}/pay`, body); }
   orders() { return this.http.get<Order[]>(`${this.base}/orders`); }
   order(n: string) { return this.http.get<Order>(`${this.base}/orders/${n}`); }
 
