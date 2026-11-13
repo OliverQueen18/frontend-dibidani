@@ -20,10 +20,12 @@
             "outputHashing": "all",
             "assets": [
               {"glob": "**/*", "input": "public"},
+              {"glob": "worker.min.js", "input": "node_modules/tesseract.js/dist", "output": "assets/ocr"},
+              {"glob": "tesseract-core*", "input": "node_modules/tesseract.js-core", "output": "assets/ocr"},
               {"glob": "**/*", "input": "src/assets", "output": "assets"}
             ],
             "styles": ["src/styles.css"],
-            "allowedCommonJsDependencies": ["html5-qrcode"]
+            "allowedCommonJsDependencies": ["html5-qrcode", "tesseract.js"]
           }
         },
         "serve": {

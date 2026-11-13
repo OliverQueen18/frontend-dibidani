@@ -36,3 +36,8 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+
+  image-studio:
+    environment:
+      STUDIO_ENV: production
+      MODEL_LICENSE_APPROVALS: ${MODEL_LICENSE_APPROVALS:?Document model weight licences before commercial deployment}

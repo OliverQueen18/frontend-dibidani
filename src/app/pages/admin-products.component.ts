@@ -83,6 +83,7 @@ import {ADMIN_PAGE_STYLES} from './admin-ui';
         <button type="button" (click)="publish.openEdit(p.id)">Modifier</button>
         <button type="button" (click)="duplicate(p)">Dupliquer</button>
         <button type="button" (click)="remove(p)">Retirer</button>
+        <button type="button" *ngIf="auth.user()?.role === 'ADMIN'" [disabled]="busyId !== null" (click)="removePermanently(p)">Supprimer définitivement</button>
       </td>
     </tr>
     <tr *ngIf="!rows.length"><td colspan="9">Aucun produit ne correspond à ces filtres.</td></tr>
@@ -371,6 +372,15 @@ export class AdminProductsComponent implements OnInit {
         this.msg = 'Copie créée (masquée). Vérifiez la fiche, puis publiez.';
       },
       error: e => { this.busy = false; this.err = e.error?.message || 'Duplication impossible.'; }
+    });
+  }
+  removePermanently(p: any) {
+    if (this.busyId !== null || this.auth.user()?.role !== 'ADMIN') return;
+    if (!confirm('Supprimer définitivement « ' + p.name + ' » ? Cette action est irréversible. Le produit, ses favoris, ses lignes de panier et ses publications sociales locales seront supprimés. Les commandes passées seront conservées.')) return;
+    this.busyId = p.id; this.err = ''; this.msg = '';
+    this.api.deleteProductPermanently(p.id).subscribe({
+      next: () => { this.busyId = null; this.close(); this.msg = 'Produit supprimé définitivement.'; if (this.rows.length === 1 && this.page > 0) this.page--; this.load(); },
+      error: e => { this.busyId = null; this.err = e.error?.message || 'Suppression impossible.'; }
     });
   }
   remove(p: any) {

@@ -9,13 +9,15 @@ import { ProductPublishService, ProductPublishSession } from '../core/product-pu
 import { ProductPhotoStudioComponent } from './product-photo-studio.component';
 import { ImagePickerComponent } from './image-picker.component';
 
+import { OcrCaptureComponent } from './ocr-capture.component';
+
 type Step = 1 | 2 | 3;
 type QuickKind = 'category' | 'brand' | 'unit' | null;
 
 @Component({
   selector: 'app-product-publish-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ProductPhotoStudioComponent, ImagePickerComponent],
+  imports: [CommonModule, FormsModule, ProductPhotoStudioComponent, ImagePickerComponent, OcrCaptureComponent],
   template: `
 <div class="scrim" *ngIf="open" role="presentation">
   <section class="sheet" role="dialog" aria-modal="true" [attr.aria-labelledby]="'pub-title'">
@@ -40,6 +42,14 @@ type QuickKind = 'category' | 'brand' | 'unit' | null;
     <form class="body" *ngIf="form" (submit)="$event.preventDefault()">
       <div class="pane" *ngIf="step===1">
         <div class="fields">
+          <label class="full">Code-barres ou QR
+            <div class="combo">
+              <input [(ngModel)]="form.barcode" name="barcode" placeholder="EAN-13, UPC, QR…" maxlength="255">
+              <button type="button" class="cam" (click)="startScan()" title="Scanner avec l’appareil photo">📷 Scanner</button>
+              <button type="button" class="cam photo" (click)="pickShot()" title="Photographier le code">📷 Photo</button>
+            </div>
+            <small class="hint">Utilisez la caméra pour lire un code-barres ou un QR code.</small>
+          </label>
           <label class="full">Nom du produit
             <input [(ngModel)]="form.name" name="name" required placeholder="Ex. Batterie 70 Ah Varta" (blur)="ensureSku()">
           </label>
@@ -116,14 +126,7 @@ type QuickKind = 'category' | 'brand' | 'unit' | null;
           <label>Référence (SKU)
             <input [(ngModel)]="form.sku" name="sku" (ngModelChange)="skuManual=true" placeholder="Générée automatiquement">
           </label>
-          <label class="full">Code-barres ou QR
-            <div class="combo">
-              <input [(ngModel)]="form.barcode" name="barcode" placeholder="EAN-13, UPC, QR…" maxlength="255">
-              <button type="button" class="cam" (click)="startScan()" title="Scanner avec l’appareil photo">📷 Scanner</button>
-              <button type="button" class="cam photo" (click)="pickShot()" title="Photographier le code">📷 Photo</button>
-            </div>
-            <small class="hint">Utilisez la caméra pour lire un code-barres ou un QR code.</small>
-          </label>
+
         </div>
         <aside class="preview">
           <p>Aperçu vitrine</p>
@@ -137,7 +140,9 @@ type QuickKind = 'category' | 'brand' | 'unit' | null;
       </div>
 
       <div class="pane photos" *ngIf="step===2">
+        <button type="button" class="ghost" (click)="studioOpen=true">✨ Retoucher avec l’IA</button>
         <app-product-photo-studio
+          *ngIf="studioOpen"
           [productId]="form.id"
           [barcode]="form.barcode"
           [urls]="form.images"
@@ -164,9 +169,11 @@ type QuickKind = 'category' | 'brand' | 'unit' | null;
           <label class="full">Résumé
             <input [(ngModel)]="form.shortDescription" name="shortDescription" placeholder="Une ligne visible sur la carte produit">
           </label>
+          <app-ocr-capture class="full" label="Résumé" (captured)="appendOcr('shortDescription', $event)"></app-ocr-capture>
           <label class="full">Description
             <textarea [(ngModel)]="form.description" name="description" placeholder="Usage, contenu du colis, conseils d’utilisation…"></textarea>
           </label>
+          <app-ocr-capture class="full" label="Description" (captured)="appendOcr('description', $event)"></app-ocr-capture>
           <div class="full specs">
             <span>Caractéristiques</span>
             <div class="spec-row" *ngFor="let s of form.specifications; let i = index">
@@ -326,6 +333,7 @@ export class ProductPublishDialogComponent {
   err = '';
   hint = '';
   drag = false;
+  studioOpen = false;
   skuManual = false;
   quick: QuickKind = null;
   draft: {name: string; parentId: number | null; symbol: string} = {name: '', parentId: null, symbol: ''};
@@ -568,6 +576,12 @@ export class ProductPublishDialogComponent {
       next: () => { this.busy = false; this.publish.markSaved(); },
       error: e => { this.busy = false; this.err = e.error?.message || 'Publication impossible.'; }
     });
+  }
+
+  appendOcr(field: 'shortDescription' | 'description', text: string) {
+    const separator = field === 'shortDescription' ? ' ' : '\n';
+    const value = field === 'shortDescription' ? text.replace(/\s+/g, ' ') : text;
+    this.form[field] = [this.form[field]?.trim(), value].filter(Boolean).join(separator);
   }
 
   ensureSku() {

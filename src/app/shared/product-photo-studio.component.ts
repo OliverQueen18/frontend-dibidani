@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subscription, interval } from 'rxjs';
+import { Subscription, timer, exhaustMap } from 'rxjs';
 import { ApiService } from '../core/api.service';
 import { uploadErrorMessage } from '../core/image-upload';
 import { PhotoEditorComponent } from './photo-editor.component';
@@ -18,6 +18,9 @@ interface Shot {
   status: ShotStatus;
   message: string;
   file?: File;
+  name?: string;
+  bytes?: number;
+  format?: string;
 }
 
 @Component({
@@ -29,7 +32,7 @@ interface Shot {
   <div class="drop" [class.on]="drag" [class.full]="shots.length>=12"
        (dragover)="onDrag($event,true)" (dragleave)="onDrag($event,false)" (drop)="onDrop($event)">
     <b>Studio photo Dibidani</b>
-    <span>Prenez une photo ou importez des clichés. Fond blanc, cadrage et signature sont appliqués automatiquement.</span>
+    <span>Importez vos photos, choisissez les réglages communs puis vérifiez chaque résultat. Les originaux sont conservés.</span>
     <div class="cta">
       <label class="btn">📷 Photographier
         <input type="file" accept="image/*" capture="environment" hidden (change)="pickFiles($event)">
@@ -40,6 +43,23 @@ interface Shot {
       <button type="button" class="ghost" (click)="startLiveCam()" *ngIf="!live && canLiveCam">Caméra live</button>
     </div>
   </div>
+
+  <fieldset class="export-options" [disabled]="shotsBusy">
+    <legend>Réglages du studio IA</legend>
+    <label>Modèle local<select [(ngModel)]="model"><option *ngFor="let m of models" [value]="m.id">{{m.id}}</option></select></label>
+    <label>Fond<select [(ngModel)]="background"><option value="white">Blanc</option><option value="transparent">Transparent</option><option value="gray">Gris clair</option><option value="custom">Personnalisé</option></select></label>
+    <label *ngIf="background==='custom'">Couleur<input type="color" [(ngModel)]="backgroundColor"></label>
+    <label>Format<select [(ngModel)]="format"><option value="webp">WebP</option><option value="png">PNG</option><option value="jpeg">JPEG (fond opaque)</option></select></label>
+    <label>Dimensions<select [(ngModel)]="preset" (ngModelChange)="setDimensions()"><option [ngValue]="400">400 × 400</option><option [ngValue]="800">800 × 800</option><option [ngValue]="1200">1200 × 1200</option><option [ngValue]="0">Personnalisées</option></select></label>
+    <label *ngIf="!preset">Largeur<input type="number" min="100" max="2400" [(ngModel)]="width"></label>
+    <label *ngIf="!preset">Hauteur<input type="number" min="100" max="2400" [(ngModel)]="height"></label>
+    <label>Qualité {{quality}} %<input type="range" min="40" max="100" [(ngModel)]="quality"></label>
+    <label>Rotation<select [(ngModel)]="rotation"><option [ngValue]="0">0°</option><option [ngValue]="90">90°</option><option [ngValue]="180">180°</option><option [ngValue]="270">270°</option></select></label>
+    <label>Luminosité<input type="range" min="0.5" max="1.5" step="0.05" [(ngModel)]="brightness"></label>
+    <label>Contraste<input type="range" min="0.5" max="1.5" step="0.05" [(ngModel)]="contrast"></label>
+    <label><input type="checkbox" [(ngModel)]="refineEdges"> Affiner les contours (plus lent)</label>
+    <button type="button" class="ghost" (click)="runBatch()" [disabled]="!shots.length">Appliquer aux photos importées</button>
+  </fieldset>
 
   <p class="err" *ngIf="err">{{err}}</p>
   <p class="ok" *ngIf="hint">{{hint}}</p>
@@ -57,6 +77,7 @@ interface Shot {
   </div>
 
   <article class="shot" *ngFor="let s of shots; let i = index" [class.on]="current===i" [class.vitrine]="isVitrine(s)">
+    <b>{{s.name || 'Photo du produit'}}</b>
     <div class="badge" *ngIf="isVitrine(s)">Image vitrine</div>
     <div class="compare" (click)="current=i">
       <div>
@@ -75,25 +96,29 @@ interface Shot {
     <div class="tools" *ngIf="current===i">
       <button type="button" (click)="openEditor(s.originalUrl)" [disabled]="busy(s)">Retoucher l’original</button>
       <button type="button" class="ghost" (click)="openEditor(s.previewUrl)" [disabled]="busy(s) || !s.previewUrl">Retoucher le résultat</button>
-      <button type="button" (click)="run(s,{removeBackground:true,whiteBackground:true,enhance:true,watermark:true,recenter:true,force:true})" [disabled]="s.status==='uploading'">Améliorer automatiquement</button>
-      <button type="button" class="ghost" (click)="run(s,{whiteBackground:true,removeBackground:true,recenter:true,watermark:false,force:true})" [disabled]="s.status==='uploading'">Fond blanc</button>
-      <button type="button" class="ghost" (click)="run(s,{recenter:true,whiteBackground:true,force:true})" [disabled]="s.status==='uploading'">Recentrer</button>
-      <button type="button" class="ghost" (click)="run(s,{watermark:true,whiteBackground:true,removeBackground:true,recenter:true,force:true})" [disabled]="s.status==='uploading'">Ajouter signature</button>
-      <button type="button" class="ghost" (click)="restart(s)" [disabled]="s.status==='uploading'">Recommencer</button>
+      <button type="button" (click)="run(s)" [disabled]="busy(s)">✨ Supprimer le fond</button>
+      <button type="button" class="ghost" (click)="run(s,{background:'white',whiteBackground:true,removeBackground:true,recenter:true,watermark:false})" [disabled]="busy(s)">Fond blanc</button>
+      <button type="button" class="ghost" (click)="run(s,{recenter:true,whiteBackground:true,force:true})" [disabled]="busy(s)">Recentrer</button>
+      <button type="button" class="ghost" (click)="run(s,{watermark:true,whiteBackground:true,removeBackground:true,recenter:true,force:true})" [disabled]="busy(s)">Ajouter signature</button>
+      <button type="button" class="ghost" (click)="restart(s)" [disabled]="busy(s)">Restaurer l’original</button>
+      <button type="button" class="ghost" (click)="retry(s)" *ngIf="s.status==='failed'">Réessayer</button>
       <label>Zoom <input type="range" min="70" max="160" [(ngModel)]="zoom" (change)="applyCrop(s)"></label>
       <label>Horizontal <input type="range" min="-30" max="30" [(ngModel)]="offX" (change)="applyCrop(s)"></label>
       <label>Vertical <input type="range" min="-30" max="30" [(ngModel)]="offY" (change)="applyCrop(s)"></label>
     </div>
     <div class="row">
       <button type="button" class="ghost" (click)="makeVitrine(s)" *ngIf="!isVitrine(s)" [disabled]="busy(s) || vitrineBusy">Définir comme image vitrine</button>
-      <button type="button" (click)="validate(s, isVitrine(s) || shots.length===1)" [disabled]="s.status!=='ready'">Valider</button>
-      <button type="button" class="ghost" (click)="remove(i)">Retirer</button>
+      <button type="button" (click)="validate(s, isVitrine(s) || shots.length===1)" [disabled]="s.status!=='ready'">Enregistrer dans le produit</button>
+      <a *ngIf="s.status==='ready'" [href]="s.previewUrl" [download]="'dibidani.'+(s.format || 'webp')">Télécharger l’image</a>
+      <span *ngIf="s.bytes">{{s.bytes / 1024 | number:'1.0-0'}} Ko</span>
+      <button type="button" class="ghost" (click)="remove(i)" [disabled]="busy(s)">Retirer</button>
     </div>
   </article>
 </div>
 `,
   styles: [`
 .studio{display:flex;flex-direction:column;gap:12px}
+.export-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;border:1px solid #c5ddd2;border-radius:12px;padding:12px}.export-options label{display:flex;flex-direction:column;gap:5px;font-size:12px}.export-options select,.export-options input{max-width:100%;padding:6px}.export-options legend{color:#087a47;font-weight:700}
 .drop{border:2px dashed #b7cfc4;border-radius:12px;padding:20px 14px;text-align:center;background:#f8fbfa}
 .drop.on{border-color:#087a47;background:#e8f7ef}
 .drop.full{opacity:.55;pointer-events:none}
@@ -108,7 +133,7 @@ interface Shot {
 .shot.on,.shot.vitrine{border-color:#087a47}
 .badge{position:absolute;top:8px;left:8px;z-index:1;background:#087a47;color:#fff;font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;border-radius:6px;padding:3px 7px}
 .compare{display:grid;grid-template-columns:1fr 1fr;gap:8px;cursor:pointer}
-.compare img{width:100%;height:160px;object-fit:contain;background:#fff;border:1px solid #edf1ef;border-radius:8px}
+.compare img{width:100%;height:160px;object-fit:contain;background:repeating-conic-gradient(#eee 0% 25%,#fff 0% 50%) 0 0/16px 16px;border:1px solid #edf1ef;border-radius:8px}
 .compare small{font-size:10px;font-weight:800;color:#6a7c75;text-transform:uppercase}
 .bar{height:4px;background:#e8eeeb;border-radius:2px;margin-top:6px;overflow:hidden}
 .bar i{display:block;height:100%;background:#087a47}
@@ -141,12 +166,24 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   offY = 0;
   live = false;
   editorSource = '';
+  models: {id: string; loaded: boolean}[] = [];
+  model = 'isnet-general-use';
+  background = 'white'; backgroundColor = '#FFFFFF'; format = 'webp';
+  preset = 1200; width = 1200; height = 1200; quality = 82;
+  rotation = 0; brightness = 1; contrast = 1; refineEdges = false;
+  maxBytes = 10 * 1024 * 1024;
+  get shotsBusy() { return this.shots.some(s => this.busy(s)); }
+  setDimensions() { if (this.preset) this.width = this.height = this.preset; }
   private localUrls = new Set<string>();
   private lastCode = '';
   private polls = new Map<number, Subscription>();
   private stream?: MediaStream;
+  private destroyed = false;
 
-  constructor(private api: ApiService) {}
+  constructor(private api: ApiService) {
+    this.api.studioModels().subscribe({next: r => { this.models = r.models || []; this.model = r.default || this.model; this.maxBytes=r.maxBytes || this.maxBytes; },
+      error: () => this.err = 'Le moteur IA est indisponible. Vous pouvez importer les photos puis réessayer.'});
+  }
 
   get canLiveCam() {
     return typeof navigator !== 'undefined'
@@ -161,17 +198,17 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   }
 
   ngOnDestroy() {
+    this.destroyed = true;
     this.polls.forEach(s => s.unsubscribe());
     this.localUrls.forEach(url => URL.revokeObjectURL(url));
     this.stopLive();
   }
 
   isVitrine(s: Shot) {
-    const url = s.catalogUrl || s.previewUrl;
-    return !!url && this.urls[0] === url;
+    return !!s.previewUrl && cleanUrl(this.urls[0] || '') === cleanUrl(s.previewUrl);
   }
 
-  private shotUrl(s: Shot) { return s.catalogUrl || s.previewUrl; }
+  private shotUrl(s: Shot) { return cleanUrl(s.previewUrl); }
 
   private hydrateUrls() {
     for (const url of this.urls || []) {
@@ -188,13 +225,19 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
       next: rows => {
         for (const a of rows || []) {
           const url = a.masterUrl || a.jpegUrl || a.catalogUrl;
-          if (!url) continue;
-          const existing = this.shots.find(s => s.assetId === a.id || this.shotUrl(s) === url);
+          const existing = this.shots.find(s => s.assetId === a.id || (!!url && this.shotUrl(s) === url));
           if (existing) { existing.assetId = a.id; existing.catalogUrl = a.catalogUrl || url; existing.previewUrl = url; }
           else this.shots = [...this.shots, {
-            key: 'asset-' + a.id, assetId: a.id, originalUrl: url, previewUrl: url, catalogUrl: a.catalogUrl || url,
-            status: 'ready', message: a.confirmed ? 'Photo du catalogue' : 'À valider'
+            key: 'asset-' + a.id, assetId: a.id, originalUrl: url || '', previewUrl: url || '', catalogUrl: a.catalogUrl || url,
+            status: url ? 'ready' : 'failed', message: a.confirmed ? 'Photo du catalogue' : 'À traiter ou à valider', bytes: a.bytes, format: a.format
           }];
+          this.api.studioOriginal(a.id).subscribe({next: blob => {
+            if (this.destroyed) return;
+            const shot = this.shots.find(s => s.assetId === a.id);
+            if (!shot) return;
+            const original = URL.createObjectURL(blob); this.localUrls.add(original);
+            shot.originalUrl = original;
+          }, error: () => {}});
         }
       },
       error: () => {}
@@ -204,7 +247,7 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   label(s: Shot) {
     if (s.status === 'uploading') return 'Envoi de la photo…';
     if (s.status === 'queued') return 'En file d’attente du studio…';
-    if (s.status === 'processing') return 'Détourage, cadrage et signature…';
+    if (s.status === 'processing') return 'L’intelligence artificielle prépare votre photo…';
     if (s.status === 'failed') return s.message || 'Traitement impossible. Recadrez manuellement ou réessayez.';
     return s.message || 'Prête à valider';
   }
@@ -226,10 +269,12 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
     this.err = '';
     for (const file of list) {
       if (this.shots.length >= 12) break;
-      if (!file.type.startsWith('image/') && !/\.(heic|heif)$/i.test(file.name)) continue;
+      if (!['image/jpeg','image/png','image/webp','image/heic','image/heif','image/gif'].includes(file.type) || file.size > this.maxBytes) {
+        this.err = 'Formats acceptés : JPEG, PNG, WebP, GIF fixe ou HEIC. Maximum ' + Math.floor(this.maxBytes / 1024 / 1024) + ' Mo par photo.'; continue;
+      }
       const url = URL.createObjectURL(file);
       this.localUrls.add(url);
-      const shot: Shot = { key: file.name + Date.now(), originalUrl: url, previewUrl: url, status: 'uploading', message: '', file };
+      const shot: Shot = { key: file.name + Date.now(), name: file.name, originalUrl: url, previewUrl: url, status: 'uploading', message: '', file };
       this.shots = [...this.shots, shot];
       this.current = this.shots.length - 1;
       this.upload(shot, file);
@@ -260,6 +305,7 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
     this.api.studioUpload(file, this.productId || undefined).subscribe({
       next: a => {
         shot.assetId = a.id;
+        shot.status = 'ready';
         this.run(shot, {removeBackground: false, whiteBackground: true, enhance: false,
           watermark: false, recenter: true, zoom: 1, offsetX: 0, offsetY: 0, force: true});
       },
@@ -271,7 +317,8 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
     this.api.studioUpload(file, this.productId || undefined).subscribe({
       next: a => {
         shot.assetId = a.id;
-        this.run(shot, { removeBackground: true, whiteBackground: true, enhance: true, watermark: true, recenter: true, force: true });
+        shot.status = 'ready';
+        this.run(shot);
       },
       error: e => { shot.status = 'failed'; shot.message = uploadErrorMessage(e); }
     });
@@ -279,22 +326,10 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
 
   run(shot: Shot, extra: Record<string, unknown> = {}) {
     if (!shot.assetId) return;
-    if (this.busy(shot) && extra['force'] !== true) return;
+    if (this.busy(shot)) return;
     shot.status = 'queued';
     shot.message = '';
-    const body = {
-      assetId: shot.assetId,
-      productId: this.productId,
-      removeBackground: extra['removeBackground'] !== false,
-      whiteBackground: extra['whiteBackground'] !== false,
-      enhance: extra['enhance'] !== false,
-      watermark: extra['watermark'] !== false,
-      recenter: extra['recenter'] !== false,
-      zoom: this.zoom / 100,
-      offsetX: this.offX / 100,
-      offsetY: this.offY / 100,
-      ...extra
-    };
+    const body = this.processBody(shot, extra);
     this.api.studioProcess(body).subscribe({
       next: job => {
         shot.jobId = job.id;
@@ -305,6 +340,40 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
     });
   }
 
+  private processBody(shot: Shot, extra: Record<string, unknown> = {}) {
+    const {force, ...settings} = extra;
+    return {
+      assetId: shot.assetId,
+      productId: this.productId,
+      removeBackground: extra['removeBackground'] !== false,
+      whiteBackground: extra['whiteBackground'] !== false,
+      enhance: extra['enhance'] === true,
+      watermark: extra['watermark'] === true,
+      recenter: extra['recenter'] !== false,
+      zoom: this.zoom / 100,
+      offsetX: this.offX / 100,
+      offsetY: this.offY / 100,
+      model: this.model, background: this.background, backgroundColor: this.backgroundColor,
+      format: this.format, width: this.width, height: this.height, quality: this.quality,
+      rotation: this.rotation, brightness: this.brightness, contrast: this.contrast, refineEdges: this.refineEdges,
+      ...settings
+    };
+  }
+
+  retry(s: Shot) { if (!s.assetId && s.file) { s.status='uploading'; this.upload(s,s.file); } else this.run(s); }
+  runBatch() {
+    const shots = this.shots.filter(s => s.assetId && !this.busy(s));
+    if (!shots.length) return;
+    shots.forEach(s => s.status='queued');
+    this.api.studioBatch(shots.map(s => this.processBody(s))).subscribe({next: results => {
+      for (const r of results) {
+        const s = shots.find(s => s.assetId===r.assetId); if (!s) continue;
+        if (r.job) { s.jobId=r.job.id; this.applyJob(s,r.job); this.watch(s); }
+        else { s.status='failed'; s.message=r.error; }
+      }
+    }, error: () => shots.forEach(s => { s.status='failed'; s.message='Traitement du lot impossible. Réessayez.'; })});
+  }
+
   applyCrop(shot: Shot) {
     if (!shot.assetId || this.busy(shot)) return;
     this.run(shot, { recenter: true, whiteBackground: true, force: true });
@@ -312,12 +381,13 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
 
   restart(shot: Shot) {
     this.zoom = 100; this.offX = 0; this.offY = 0;
-    this.run(shot, { removeBackground: true, whiteBackground: true, enhance: true, watermark: true, recenter: true, zoom: 1, offsetX: 0, offsetY: 0, force: true });
+    this.run(shot, { removeBackground: false, background: 'transparent', enhance: false, watermark: false, recenter: false, rotation: 0, brightness: 1, contrast: 1, zoom: 1, offsetX: 0, offsetY: 0 });
   }
 
   private applyJob(shot: Shot, job: any) {
-    shot.status = job.status === 'COMPLETED' ? 'ready' : job.status === 'FAILED' ? 'failed' : 'processing';
+    shot.status = job.status === 'COMPLETED' ? 'ready' : job.status === 'FAILED' ? 'failed' : job.status === 'PENDING' ? 'queued' : 'processing';
     shot.message = job.message || '';
+    shot.bytes = job.asset?.bytes; shot.format = job.asset?.format;
     const url = job.asset?.masterUrl || job.asset?.jpegUrl;
     if (url) {
       shot.previewUrl = bust(url);
@@ -326,9 +396,9 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
   }
 
   private watch(shot: Shot) {
-    if (!shot.jobId) return;
+    if (!shot.jobId || this.destroyed) return;
     this.polls.get(shot.jobId)?.unsubscribe();
-    const tick = () => this.api.studioJob(shot.jobId!).subscribe({
+    const sub = timer(0, 1800).pipe(exhaustMap(() => this.api.studioJob(shot.jobId!))).subscribe({
       next: job => {
         this.applyJob(shot, job);
         if (job.status === 'COMPLETED' || job.status === 'FAILED') {
@@ -338,8 +408,6 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
       },
       error: () => { shot.status = 'failed'; shot.message = 'Suivi de tâche interrompu.'; this.polls.get(shot.jobId!)?.unsubscribe(); }
     });
-    tick();
-    const sub = interval(1200).subscribe(() => tick());
     this.polls.set(shot.jobId, sub);
   }
 
@@ -379,10 +447,11 @@ export class ProductPhotoStudioComponent implements OnDestroy, OnChanges {
 
   remove(i: number) {
     const s = this.shots[i];
+    if (this.busy(s)) return;
     if (s.assetId) this.api.studioDelete(s.assetId).subscribe({ error: () => {} });
     const url = s.previewUrl;
     this.shots = this.shots.filter((_, idx) => idx !== i);
-    this.urlsChange.emit(this.urls.filter(u => u !== url));
+    this.urlsChange.emit(this.urls.filter(u => cleanUrl(u) !== cleanUrl(url)));
   }
 
   lookup(code: string) {

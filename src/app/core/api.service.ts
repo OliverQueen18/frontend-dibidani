@@ -71,6 +71,7 @@ export class ApiService {
   setProductActive(id: number, active: boolean) {
     return this.http.post<any>(`${this.base}/admin/products/${id}/active`, {}, {params: {active}});
   }
+  deleteProductPermanently(id: number) { return this.http.delete<void>(`${this.base}/admin/products/${id}/permanent`); }
   deleteProduct(id: number) { return this.http.delete<any>(`${this.base}/admin/products/${id}`); }
   adminCategories() { return this.http.get<any[]>(`${this.base}/admin/categories`); }
   saveCategory(body: any, id?: number) {
@@ -155,15 +156,14 @@ export class ApiService {
     return this.http.delete(`${this.base}/admin/uploads`, {params: {url}});
   }
   studioUpload(file: File, productId?: number) {
-    return from(prepareImageUpload(file)).pipe(
-      switchMap(prepared => {
         const fd = new FormData();
-        fd.append('file', prepared);
+        fd.append('file', file);
         if (productId) fd.append('productId', String(productId));
         return this.http.post<any>(`${this.base}/products/images/upload`, fd);
-      })
-    );
   }
+  studioModels() { return this.http.get<any>(`${this.base}/products/images/models`); }
+  studioBatch(images: any[]) { return this.http.post<any[]>(`${this.base}/products/images/batch-process`, {images}); }
+  studioOriginal(id: number) { return this.http.get(`${this.base}/products/images/${id}/original`, {responseType: 'blob'}); }
   studioProcess(body: any) { return this.http.post<any>(`${this.base}/products/images/process`, body); }
   studioJob(id: number) { return this.http.get<any>(`${this.base}/products/images/jobs/${id}`); }
   studioConfirm(id: number, body: any) { return this.http.post<any>(`${this.base}/products/images/${id}/confirm`, body); }
